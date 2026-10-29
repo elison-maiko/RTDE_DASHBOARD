@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UR10 · Telemetria RTDE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- CDNs para Socket.IO e Chart.js -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+<style>
+  :root{
+    --bg: #0f1315;
+    --panel: #171c1f;
+    --panel-2: #1d2327;
+    --line: #2a3136;
+    --text: #d8dfe3;
+    --text-dim: #7c8790;
+    --accent: #ffb020;      /* amber - primary highlight */
+    --run: #45d6a8;         /* running / healthy */
+    --fault: #ff5a5f;       /* fault / error */
+    --idle: #5b8fd9;        /* idle / other states */
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body{
+    display:flex; flex-direction:column;
+    min-height:100vh;
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    border-bottom: 1px solid var(--line);
+    padding: 18px 28px 0px 28px;
+    display:flex; flex-direction:column; gap:16px;
+    background: linear-gradient(180deg, #12171a 0%, var(--bg) 100%);
+  }
+
+  .header-top{
+    display:flex; align-items:center; justify-content:space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+
+  .brand{ display:flex; align-items:baseline; gap:10px; }
+  .brand .model{
+    font-family: var(--mono);
+    font-weight:700;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+    color: var(--text);
+  }
+  .brand .sub{
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  /* ---------- Controlo do Robô (Dashboard Client) ---------- */
+  .robot-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
+  .ctrl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .ctrl-btn:hover {
+    filter: brightness(1.2);
+  }
+
+  .ctrl-btn.play {
+    border-color: rgba(69, 214, 168, 0.4);
+    color: var(--run);
+  }
+  .ctrl-btn.play:hover {
+    background: rgba(69, 214, 168, 0.12);
+  }
+
+  .ctrl-btn.pause {
+    border-color: rgba(255, 176, 32, 0.4);
+    color: var(--accent);
+  }
+  .ctrl-btn.pause:hover {
+    background: rgba(255, 176, 32, 0.12);
+  }
+
+  .ctrl-btn.stop {
+    border-color: rgba(255, 90, 95, 0.4);
+    color: var(--fault);
+  }
+  .ctrl-btn.stop:hover {
+    background: rgba(255, 90, 95, 0.12);
+  }
+
+  .status-cluster{ display:flex; align-items:center; gap:22px; }
+
+  .status-item{ display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
+  .status-item .label{ font-size: 10.5px; color: var(--text-dim); text-transform:uppercase; letter-spacing: 0.08em; }
+  .status-item .value{ font-family: var(--mono); font-size: 14px; }
+
+  .pill{
+    display:inline-flex; align-items:center; gap:7px;
+    padding: 5px 12px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--panel);
+  }
+  .pill .dot{ width:7px; height:7px; border-radius:50%; background: var(--text-dim); }
+  .pill.ok .dot{ background: var(--run); box-shadow: 0 0 6px var(--run); }
+  .pill.bad .dot{ background: var(--fault); box-shadow: 0 0 6px var(--fault); }
+  .pill.wait .dot{ background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: blink 1.2s infinite; }
+  @keyframes blink{ 50%{ opacity:0.35; } }
+
+  .status-stack{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+
+  .log-btn{
+    display:inline-flex; align-items:center; gap:7px;
+    padding: 5px 12px;
+    border-radius: 3px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    background: var(--panel);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .log-btn:hover{ background: rgba(255,176,32,0.1); }
+  .log-btn .dot-rec{ width:7px; height:7px; border-radius:50%; background: var(--accent); display:inline-block; }
+  .log-btn.active{
+    border-color: var(--fault);
+    color: var(--fault);
+    background: rgba(255,90,95,0.1);
+  }
+  .log-btn.active .dot-rec{ background: var(--fault); animation: blink 1s infinite; }
+
+  /* ---------- Nav Tabs ---------- */
+  .nav-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid transparent;
+  }
+
+  .tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 10px 18px;
+    font-family: var(--mono);
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+  }
+
+  .tab-btn:hover {
+    color: var(--text);
+    background: var(--panel);
+  }
+
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+    background: var(--panel);
+    font-weight: 600;
+  }
+
+  /* ---------- Layout ---------- */
+  main{
+    flex:1;
+    padding: 24px 28px 40px;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .error-banner{
+    display:none;
+    border: 1px solid var(--fault);
+    background: rgba(255,90,95,0.08);
+    color: #ffb3b5;
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ---------- Home Grid Cards ---------- */
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+  }
+
+  .card{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 16px 16px 10px;
+    display:flex; flex-direction:column; gap:10px;
+    position:relative;
+    overflow:hidden;
+  }
+  .card::before{
+    content:"";
+    position:absolute; left:0; top:0; bottom:0;
+    width:3px;
+    background: var(--idle);
+    transition: background 0.2s ease;
+  }
+  .card[data-mode="253"]::before{ background: var(--run); }
+  .card[data-mode="252"]::before{ background: var(--fault); }
+
+  .card-head{ display:flex; align-items:center; justify-content:space-between; }
+  .card-head .name{ font-weight:600; font-size:14.5px; }
+  .mode-badge{
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .mode-badge.run{ color: var(--run); border-color: rgba(69,214,168,0.35); }
+  .mode-badge.fault{ color: var(--fault); border-color: rgba(255,90,95,0.35); }
+
+  .metrics{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .metric{ display:flex; flex-direction:column; gap:2px; }
+  .metric .m-label{ font-size:10.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; }
+  .metric .m-value{ font-family: var(--mono); font-size: 16px; font-weight:600; }
+  .metric .m-value.warn{ color: var(--accent); }
+  .metric .m-value.bad{ color: var(--fault); }
+
+  .spark{ height:46px; margin-top:2px; }
+
+  /* ---------- Telemetry Section (Large Chart Layout) ---------- */
+  .telemetry-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 20px;
+  }
+
+  .joint-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-right: 1px solid var(--line);
+    padding-right: 16px;
+  }
+
+  .selector-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+
+  .joint-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 13px;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+
+  .joint-btn:hover {
+    border-color: var(--text-dim);
+  }
+
+  .joint-btn .icon {
+    font-size: 14px;
+    transition: color 0.15s ease;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+
+  .chart-header .titles{ display:flex; flex-direction:column; gap:4px; }
+
+  .chart-title {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--text);
+    text-transform: uppercase;
+  }
+
+  .chart-subtitle {
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+
+  .pause-btn {
+    display:inline-flex; align-items:center; gap:7px;
+    background: var(--panel-2);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+  .pause-btn:hover{ background: rgba(255,176,32,0.1); }
+  .pause-btn.is-paused{ background: rgba(255,176,32,0.12); }
+
+  .main-chart-container {
+    height: 560px;
+    position: relative;
+  }
+
+  /* ---------- Fault History Table ---------- */
+  .fault-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .fault-table th, .fault-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .fault-table th {
+    background: var(--panel-2);
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  /* ---------- Footer / TCP pose ---------- */
+  .pose-panel{
+    margin-top: 22px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 14px 18px;
+    display:flex; flex-wrap:wrap; gap: 22px;
+    align-items:center;
+  }
+  .pose-title{ font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); margin-right:6px; }
+  .pose-val{ font-family: var(--mono); font-size:13.5px; }
+  .pose-val span{ color: var(--text-dim); font-size: 11px; margin-right:3px; }
+
+  footer{
+    text-align:center;
+    color: var(--text-dim);
+    font-size: 11.5px;
+    padding: 14px;
+    font-family: var(--mono);
+  }
+
+  @media (max-width: 800px) {
+    .telemetry-layout {
+      grid-template-columns: 1fr;
+    }
+    .joint-selector {
+      border-right: none;
+      border-bottom: 1px solid var(--line);
+      padding-right: 0;
+      padding-bottom: 16px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .pill.wait .dot{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="brand">
+      <span class="model">UR10 · RTDE</span>
+      <span class="sub">Telemetria em tempo real</span>
+    </div>
+
+    <!-- PAINEL DE CONTROLO DO ROBÔ -->
+    <div class="robot-controls">
+      <button class="ctrl-btn play" onclick="sendRobotCommand('play')" title="Iniciar Programa">
+        ▶ Play
+      </button>
+      <button class="ctrl-btn pause" onclick="sendRobotCommand('pause')" title="Pausar Programa">
+        ⏸ Pause
+      </button>
+      <button class="ctrl-btn stop" onclick="sendRobotCommand('stop')" title="Parar Programa">
+        ⏹ Stop
+      </button>
+    </div>
+
+    <div class="status-cluster">
+      <div class="status-item">
+        <span class="label">Alvo</span>
+        <span class="value">{{ ip }}</span>
+      </div>
+      <div class="status-item">
+        <span class="label">Amostragem</span>
+        <span class="value" id="rate">— Hz</span>
+      </div>
+      <div class="status-stack">
+        <span class="pill wait" id="conn-pill">
+          <span class="dot"></span>
+          <span id="conn-label">Conectando…</span>
+        </span>
+        <button class="log-btn" id="log-btn" onclick="toggleLogging()">
+          <span class="dot-rec" id="log-icon"></span> <span id="log-label">START LOGS</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab(event, 'home')">Home</button>
+    <button class="tab-btn" onclick="switchTab(event, 'torque')">Torch</button>
+    <button class="tab-btn" onclick="switchTab(event, 'current')">Current</button>
+    <button class="tab-btn" onclick="switchTab(event, 'temp')">Temperature</button>
+    <button class="tab-btn" onclick="switchTab(event, 'fault')">Fault History</button>
+    <button class="tab-btn" onclick="switchTab(event, 'logs')">Logs</button>
+  </nav>
+</header>
+
+<main>
+  <div class="error-banner" id="error-banner"></div>
+
+  <!-- ABA: HOME -->
+  <div id="tab-home" class="tab-content active">
+    <div class="grid" id="joint-grid"></div>
+  </div>
+
+  <!-- ABA: TELEMETRIA COM GRÁFICO GRANDE -->
+  <div id="tab-telemetry" class="tab-content">
+    <div class="telemetry-layout">
+      <div class="joint-selector">
+        <div class="selector-title">Exibir Juntas</div>
+        <div id="joint-buttons-container"></div>
+      </div>
+      <div>
+        <div class="chart-header">
+          <div class="titles">
+            <div class="chart-title" id="chart-title">EVOLUÇÃO NO TEMPO</div>
+            <div class="chart-subtitle" id="chart-subtitle">Telemetria em tempo real das juntas selecionadas</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <button class="pause-btn" id="live-btn" style="display:none;" onclick="backToLive()">
+              <span>↺</span> Voltar ao vivo
+            </button>
+            <button class="pause-btn" id="pause-btn" onclick="togglePause()">
+              <span id="pause-icon">⏸</span> <span id="pause-label">Pausar</span>
+            </button>
+          </div>
+        </div>
+        <div class="main-chart-container">
+          <canvas id="mainChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABA: FAULT HISTORY -->
+  <div id="tab-fault" class="tab-content">
+    <table class="fault-table">
+      <thead>
+        <tr>
+          <th>Horário</th>
+          <th>Junta</th>
+          <th>Código</th>
+          <th>Mensagem</th>
+        </tr>
+      </thead>
+      <tbody id="fault-history-body">
+        <tr>
+          <td colspan="4" style="color: var(--text-dim); text-align: center;">Nenhum registro de falha detectado.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ABA: LOGS -->
+  <div id="tab-logs" class="tab-content">
+    <table class="fault-table">
+      <thead>
+        <tr>
+          <th>Arquivo</th>
+          <th>Início</th>
+          <th>Fim</th>
+          <th>Duração</th>
+          <th>Amostras</th>
+          <th>Download</th>
+        </tr>
+      </thead>
+      <tbody id="logs-body">
+        <tr>
+          <td colspan="6" style="color: var(--text-dim); text-align: center;">Nenhum log gerado ainda. Clique em "START LOGS" no topo da página.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- PAINEL TCP POSE -->
+  <div class="pose-panel" id="pose-panel" style="display:none">
+    <span class="pose-title">TCP Pose</span>
+    <span class="pose-val"><span>X</span><span id="pose-x">—</span></span>
+    <span class="pose-val"><span>Y</span><span id="pose-y">—</span></span>
+    <span class="pose-val"><span>Z</span><span id="pose-z">—</span></span>
+    <span class="pose-val"><span>RX</span><span id="pose-rx">—</span></span>
+    <span class="pose-val"><span>RY</span><span id="pose-ry">—</span></span>
+    <span class="pose-val"><span>RZ</span><span id="pose-rz">—</span></span>
+  </div>
+</main>
+
+<footer>UR10 Dashboard · gerado localmente</footer>
+
+<script>
+const JOINT_NAMES = ["J1 (Base)","J2 (Shoulder)","J3 (Elbow)","J4 (Wrist 1)","J5 (Wrist 2)","J6 (Wrist 3)"];
+const JOINT_COLORS = ['#ffb020', '#45d6a8', '#5b8fd9', '#ff5a5f', '#a06ee1', '#00f2fe'];
+const METRIC_META = {
+  torque: { title: 'EVOLUÇÃO DE TORQUE NO TEMPO', unit: 'Nm', digits: 2 },
+  current: { title: 'EVOLUÇÃO DE CORRENTE NO TEMPO', unit: 'A', digits: 2 },
+  temp:   { title: 'EVOLUÇÃO DE TEMPERATURA NO TEMPO', unit: '°C', digits: 1 }
+};
+const BUFFER_LEN = 3000;
+const LIVE_WINDOW = 200;
+const SPARK_LEN = 100;
+
+const jointSelection = [true, true, true, true, true, true];
+const fullHistory = JOINT_NAMES.map(() => ({ torque: [], current: [], temp: [] }));
+const timeLabels = [];
+const positionHistory = [];
+const sparkCharts = [];
+let mainChart = null;
+
+let currentMetric = 'torque';
+let currentTab = 'home';
+let isPaused = false;
+let liveFollow = true;
+
+let isLogging = false;
+let logLines = [];
+let logStartTs = null;
+let savedLogs = [];
+
+// Função para enviar comandos do DashboardClient ao Backend
+function sendRobotCommand(action) {
+  fetch(`/api/control/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'ok') {
+      console.log(`[Dashboard Control] Comando '${action}' enviado com sucesso.`);
+    } else {
+      console.error(`[Dashboard Control] Erro ao enviar '${action}':`, data.message);
+      alert(`Erro no comando ${action.toUpperCase()}: ${data.message}`);
+    }
+  })
+  .catch(err => {
+    console.error(`[Dashboard Control] Falha na requisição:`, err);
+    alert(`Erro de conexão ao tentar enviar o comando ${action.toUpperCase()}`);
+  });
+}
+
+function formatTime(unixSeconds) {
+  const d = new Date(unixSeconds * 1000);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  return `${hh}:${mm}:${ss}.${ms}`;
+}
+
+const grid = document.getElementById('joint-grid');
+const jointButtonsContainer = document.getElementById('joint-buttons-container');
+
+JOINT_NAMES.forEach((name, i) => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = `card-${i}`;
+  card.innerHTML = `
+    <div class="card-head">
+      <span class="name">${name}</span>
+      <span class="mode-badge" id="mode-${i}">—</span>
+    </div>
+    <div class="metrics">
+      <div class="metric"><span class="m-label">Temp</span><span class="m-value" id="temp-${i}">—</span></div>
+      <div class="metric"><span class="m-label">Torque</span><span class="m-value" id="torque-${i}">—</span></div>
+      <div class="metric"><span class="m-label">Corrente</span><span class="m-value" id="current-${i}">—</span></div>
+    </div>
+    <div class="spark"><canvas id="spark-${i}"></canvas></div>
+  `;
+  grid.appendChild(card);
+
+  if (typeof Chart !== 'undefined') {
+    try {
+      const ctx = document.getElementById(`spark-${i}`).getContext('2d');
+      sparkCharts.push(new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: Array(SPARK_LEN).fill(''),
+          datasets: [{
+            data: [],
+            borderColor: JOINT_COLORS[i],
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.3,
+            fill: true,
+            backgroundColor: JOINT_COLORS[i] + '14'
+          }]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: { display: false }, y: { display: false } },
+          plugins: { legend: { display: false }, tooltip: { enabled: false } }
+        }
+      }));
+    } catch (e) {
+      console.warn("Não foi possível criar gráfico Chart.js para junta " + i, e);
+    }
+  }
+
+  const btn = document.createElement('div');
+  btn.className = 'joint-btn active';
+  btn.id = `joint-btn-${i}`;
+  btn.onclick = () => toggleJoint(i);
+  btn.innerHTML = `<span class="icon" id="joint-icon-${i}" style="color:${JOINT_COLORS[i]}">●</span> <span>${name}</span>`;
+  jointButtonsContainer.appendChild(btn);
+});
+
+if (typeof Chart !== 'undefined') {
+  try {
+    const zoomPlugin = window.ChartZoom || window['chartjs-plugin-zoom'];
+    if (zoomPlugin) Chart.register(zoomPlugin);
+  } catch (e) {
+    console.warn("Não foi possível registrar o plugin de zoom:", e);
+  }
+  try {
+    const ctxMain = document.getElementById('mainChart').getContext('2d');
+    mainChart = new Chart(ctxMain, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: JOINT_NAMES.map((name, i) => ({
+          label: name,
+          data: [],
+          borderColor: JOINT_COLORS[i],
+          backgroundColor: JOINT_COLORS[i],
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: JOINT_COLORS[i],
+          pointHoverBorderColor: '#0f1315',
+          tension: 0.2,
+          hidden: !jointSelection[i]
+        }))
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            grid: { color: '#2a3136' },
+            ticks: {
+              color: '#7c8790',
+              maxRotation: 0,
+              autoSkip: true,
+              callback: function (value) {
+                const label = this.getLabelForValue(value);
+                return typeof label === 'string' ? label.split('.')[0] : label;
+              }
+            }
+          },
+          y: { grid: { color: '#2a3136' }, ticks: { color: '#7c8790' } }
+        },
+        plugins: {
+          legend: { labels: { color: '#d8dfe3', font: { family: 'IBM Plex Mono' } } },
+          zoom: {
+            limits: { x: { min: 'original', max: 'original' } },
+            pan: {
+              enabled: true,
+              mode: 'x',
+              onPanStart: () => leaveLiveFollow(),
+            },
+            zoom: {
+              wheel: { enabled: true },
+              pinch: { enabled: true },
+              drag: { enabled: false },
+              mode: 'x',
+              onZoomStart: () => leaveLiveFollow(),
+            }
+          },
+          tooltip: {
+            backgroundColor: '#171c1f',
+            borderColor: '#2a3136',
+            borderWidth: 1,
+            titleColor: '#ffb020',
+            titleFont: { family: 'IBM Plex Mono', weight: '700' },
+            bodyColor: '#d8dfe3',
+            bodyFont: { family: 'IBM Plex Mono' },
+            padding: 10,
+            usePointStyle: true,
+            boxPadding: 4,
+            callbacks: {
+              title: (items) => items.length ? items[0].label : '',
+              label: (item) => {
+                const meta = METRIC_META[currentMetric];
+                const val = item.parsed.y;
+                const jointIdx = item.datasetIndex;
+                const posRow = positionHistory[item.dataIndex];
+                const pos = posRow ? posRow[jointIdx] : null;
+                const posStr = pos != null ? `  ·  pos: ${pos.toFixed(1)}°` : '';
+                return ` ${item.dataset.label}: ${val != null ? val.toFixed(meta.digits) : '—'} ${meta.unit}${posStr}`;
+              }
+            }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.warn("Erro ao carregar gráfico principal:", e);
+  }
+}
+
+function switchTab(evt, tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+  if (evt && evt.target) {
+    evt.target.classList.add('active');
+  }
+
+  if (tab === 'home') {
+    document.getElementById('tab-home').classList.add('active');
+  } else if (tab === 'fault') {
+    document.getElementById('tab-fault').classList.add('active');
+  } else if (tab === 'logs') {
+    document.getElementById('tab-logs').classList.add('active');
+  } else {
+    document.getElementById('tab-telemetry').classList.add('active');
+    currentMetric = tab;
+    const meta = METRIC_META[currentMetric];
+    document.getElementById('chart-title').textContent = meta.title;
+    updateMainChartData();
+  }
+}
+
+function toggleJoint(index) {
+  jointSelection[index] = !jointSelection[index];
+  const btn = document.getElementById(`joint-btn-${index}`);
+  const icon = document.getElementById(`joint-icon-${index}`);
+
+  if (jointSelection[index]) {
+    btn.classList.add('active');
+    icon.textContent = '●';
+    icon.style.color = JOINT_COLORS[index];
+  } else {
+    btn.classList.remove('active');
+    icon.textContent = '○';
+    icon.style.color = 'var(--text-dim)';
+  }
+
+  if (mainChart) {
+    mainChart.setDatasetVisibility(index, jointSelection[index]);
+    mainChart.update('none');
+  }
+}
+
+function togglePause() {
+  isPaused = !isPaused;
+  const btn = document.getElementById('pause-btn');
+  const icon = document.getElementById('pause-icon');
+  const label = document.getElementById('pause-label');
+  btn.classList.toggle('is-paused', isPaused);
+  icon.textContent = isPaused ? '▶' : '⏸';
+  label.textContent = isPaused ? 'Retomar' : 'Pausar';
+}
+
+function leaveLiveFollow() {
+  if (!liveFollow) return;
+  liveFollow = false;
+  const liveBtn = document.getElementById('live-btn');
+  if (liveBtn) liveBtn.style.display = 'inline-flex';
+}
+
+function backToLive() {
+  liveFollow = true;
+  document.getElementById('live-btn').style.display = 'none';
+  if (mainChart && mainChart.resetZoom) mainChart.resetZoom('none');
+  updateMainChartData();
+}
+
+const mainChartCanvas = document.getElementById('mainChart');
+if (mainChartCanvas) {
+  mainChartCanvas.addEventListener('wheel', (e) => {
+    if (!mainChart || !e.shiftKey) return;
+    e.preventDefault();
+    leaveLiveFollow();
+    mainChart.pan({ x: -e.deltaY }, undefined, 'default');
+  }, { passive: false });
+}
+
+function buildLogHeader() {
+  const cols = ['timestamp'];
+  JOINT_NAMES.forEach(n => {
+    cols.push(`${n}_modo`, `${n}_temp_C`, `${n}_torque_Nm`, `${n}_corrente_A`, `${n}_pos_deg`);
+  });
+  cols.push('tcp_x', 'tcp_y', 'tcp_z', 'tcp_rx', 'tcp_ry', 'tcp_rz');
+  return cols.join(',');
+}
+
+function appendLogLine(d, positionsDeg) {
+  const row = [formatTime(d.timestamp)];
+  d.joint_modes.forEach((m, i) => {
+    row.push(`${m.code}:${m.label}`);
+    row.push(d.temperature[i] != null ? d.temperature[i].toFixed(1) : '');
+    row.push(d.torque[i] != null ? d.torque[i].toFixed(3) : '');
+    row.push(d.current[i] != null ? d.current[i].toFixed(3) : '');
+    row.push(positionsDeg && positionsDeg[i] != null ? positionsDeg[i].toFixed(2) : '');
+  });
+  if (d.tcp_pose) {
+    row.push(...d.tcp_pose.map(v => v.toFixed(4)));
+  } else {
+    row.push('', '', '', '', '', '');
+  }
+  logLines.push(row.join(','));
+}
+
+function toggleLogging() {
+  isLogging = !isLogging;
+  const btn = document.getElementById('log-btn');
+  const label = document.getElementById('log-label');
+  btn.classList.toggle('active', isLogging);
+
+  if (isLogging) {
+    logLines = [buildLogHeader()];
+    logStartTs = Date.now();
+    label.textContent = 'STOP';
+  } else {
+    label.textContent = 'START LOGS';
+    finalizeLog();
+  }
+}
+
+function finalizeLog() {
+  if (logLines.length <= 1) return;
+
+  const content = logLines.join('\n');
+  const blob = new Blob([content], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+
+  const startDate = new Date(logStartTs);
+  const endDate = new Date();
+  const durationSec = ((endDate - startDate) / 1000).toFixed(1);
+  const stamp = startDate.toISOString().replace(/[:.]/g, '-');
+  const filename = `ur10_log_${stamp}.csv`;
+
+  savedLogs.unshift({
+    filename,
+    url,
+    start: startDate.toLocaleTimeString(),
+    end: endDate.toLocaleTimeString(),
+    duration: `${durationSec}s`,
+    samples: logLines.length - 1
+  });
+
+  renderLogsTab();
+}
+
+function renderLogsTab() {
+  const tbody = document.getElementById('logs-body');
+  if (savedLogs.length === 0) return;
+  tbody.innerHTML = savedLogs.map(log => `
+    <tr>
+      <td>${log.filename}</td>
+      <td>${log.start}</td>
+      <td>${log.end}</td>
+      <td>${log.duration}</td>
+      <td>${log.samples}</td>
+      <td><a href="${log.url}" download="${log.filename}" style="color:var(--accent); text-decoration:none;">⬇ Baixar</a></td>
+    </tr>
+  `).join('');
+}
+
+function updateMainChartData() {
+  if (!mainChart) return;
+  mainChart.data.labels = timeLabels;
+  JOINT_NAMES.forEach((_, i) => {
+    mainChart.data.datasets[i].data = fullHistory[i][currentMetric] || [];
+  });
+
+  if (liveFollow && timeLabels.length > 0) {
+    const start = Math.max(0, timeLabels.length - LIVE_WINDOW);
+    mainChart.options.scales.x.min = timeLabels[start];
+    mainChart.options.scales.x.max = timeLabels[timeLabels.length - 1];
+  }
+
+  mainChart.update('none');
+}
+
+const connPill = document.getElementById('conn-pill');
+const connLabel = document.getElementById('conn-label');
+const errorBanner = document.getElementById('error-banner');
+const rateEl = document.getElementById('rate');
+
+let lastTs = null;
+
+function setConnection(connected, error){
+  connPill.classList.remove('ok','bad','wait');
+  if(connected){
+    connPill.classList.add('ok');
+    connLabel.textContent = 'RTDE conectado';
+    errorBanner.style.display = 'none';
+  } else {
+    connPill.classList.add('bad');
+    connLabel.textContent = 'Desconectado';
+    if(error){
+      errorBanner.style.display = 'block';
+      errorBanner.textContent = `[ERRO] ${error} — tentando reconectar…`;
+    }
+  }
+}
+
+const recordedFaults = new Set();
+function logFault(jointIndex, code, label) {
+  const key = `${jointIndex}-${code}`;
+  if (!recordedFaults.has(key)) {
+    recordedFaults.add(key);
+    const tbody = document.getElementById('fault-history-body');
+    if (tbody.children.length === 1 && tbody.children[0].children.length === 1) {
+      tbody.innerHTML = '';
+    }
+    const time = new Date().toLocaleTimeString();
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${time}</td>
+      <td style="color:${JOINT_COLORS[jointIndex]}">${JOINT_NAMES[jointIndex]}</td>
+      <td><span class="mode-badge fault">${code}</span></td>
+      <td>Alerta de estado de erro: ${label}</td>
+    `;
+    tbody.prepend(row);
+  }
+}
+
+const socket = typeof io !== 'undefined' ? io() : null;
+
+if (socket) {
+  socket.on('connection_status', (state) => {
+    setConnection(state.connected, state.error);
+  });
+
+  socket.on('telemetry', (d) => {
+    if (isLogging) {
+      const posDegLog = d.joint_positions ? d.joint_positions.map(rad => rad * 180 / Math.PI) : null;
+      appendLogLine(d, posDegLog);
+    }
+
+    if (isPaused) return;
+
+    setConnection(true, null);
+
+    if(lastTs){
+      const hz = 1 / (d.timestamp - lastTs);
+      rateEl.textContent = `${hz.toFixed(1)} Hz`;
+    }
+    lastTs = d.timestamp;
+
+    timeLabels.push(formatTime(d.timestamp));
+    if (timeLabels.length > BUFFER_LEN) timeLabels.shift();
+
+    const positionsDeg = d.joint_positions ? d.joint_positions.map(rad => rad * 180 / Math.PI) : null;
+    positionHistory.push(positionsDeg);
+    if (positionHistory.length > BUFFER_LEN) positionHistory.shift();
+
+    d.joint_modes.forEach((m, i) => {
+      const card = document.getElementById(`card-${i}`);
+      if(card) card.dataset.mode = m.code;
+
+      const badge = document.getElementById(`mode-${i}`);
+      if(badge) {
+        badge.textContent = `${m.code} · ${m.label}`;
+        badge.classList.remove('run','fault');
+        if(m.code === 253) badge.classList.add('run');
+        if(m.code === 252) {
+          badge.classList.add('fault');
+          logFault(i, m.code, m.label);
+        }
+      }
+
+      const temp = d.temperature[i];
+      const torque = d.torque[i];
+      const current = d.current[i];
+
+      const tEl = document.getElementById(`temp-${i}`);
+      if(tEl) {
+        tEl.textContent = temp != null ? `${temp.toFixed(1)} °C` : '—';
+        tEl.classList.toggle('warn', temp != null && temp > 50);
+        tEl.classList.toggle('bad', temp != null && temp > 60);
+      }
+
+      const torqEl = document.getElementById(`torque-${i}`);
+      if(torqEl) torqEl.textContent = torque != null ? `${torque.toFixed(2)} Nm` : '—';
+
+      const currEl = document.getElementById(`current-${i}`);
+      if(currEl) currEl.textContent = current != null ? `${current.toFixed(2)} A` : '—';
+
+      const h = fullHistory[i];
+      if (h) {
+        h.torque.push(torque ?? 0);
+        h.current.push(current ?? 0);
+        h.temp.push(temp ?? 0);
+
+        if(h.torque.length > BUFFER_LEN) {
+          h.torque.shift();
+          h.current.shift();
+          h.temp.shift();
+        }
+
+        if (sparkCharts[i]) {
+          sparkCharts[i].data.datasets[0].data = h.torque.slice(-SPARK_LEN);
+          sparkCharts[i].data.labels = Array(Math.min(SPARK_LEN, h.torque.length)).fill('');
+          sparkCharts[i].update('none');
+        }
+      }
+    });
+
+    if (mainChart && currentTab !== 'home' && currentTab !== 'fault') {
+      updateMainChartData();
+    }
+
+    if(d.tcp_pose){
+      document.getElementById('pose-panel').style.display = 'flex';
+      const [x,y,z,rx,ry,rz] = d.tcp_pose;
+      document.getElementById('pose-x').textContent = x.toFixed(4);
+      document.getElementById('pose-y').textContent = y.toFixed(4);
+      document.getElementById('pose-z').textContent = z.toFixed(4);
+      document.getElementById('pose-rx').textContent = rx.toFixed(4);
+      document.getElementById('pose-ry').textContent = ry.toFixed(4);
+      document.getElementById('pose-rz').textContent = rz.toFixed(4);
+    }
+  });
+
+  socket.on('disconnect', () => setConnection(false, 'Servidor local desconectado'));
+} else {
+  console.error("Biblioteca Socket.IO não foi carregada.");
+}
+</script>
+
+</body>
+</html>
