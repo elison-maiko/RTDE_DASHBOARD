@@ -1,20 +1,29 @@
 /**
- * Ponto de entrada do frontend: abas, botões do robô e conexão Socket.IO.
+ * Página /monitor: abas, botões do robô e eventos em tempo real.
  *
- * Fluxo: backend emite "telemetry" -> onTelemetry() -> logs, histórico, cards, gráfico.
+ * Fluxo: servidor emite "telemetry" -> onTelemetry() -> logs, histórico, cards, gráfico.
+ *        servidor emite "fault_event" -> Fault History (o popup fica em alerts.js).
  *
  * Arquivos:
  *   config.js  constantes (nomes, cores, métricas)
  *   utils.js   helpers de DOM e formatação
+ *   socket.js  conexão Socket.IO compartilhada
  *   charts.js  histórico + gráficos (Chart.js)
  *   panels.js  status, cards, falhas, TCP pose
  *   logs.js    gravação CSV
+ *   alerts.js  popup de limite excedido (todas as páginas)
  */
 
 import { METRICS } from './config.js';
-import { history, initMainChart, isPaused, refreshMainChart, showMetric } from './charts.js';
+import {
+  history, initMainChart, initPowerChart, isPaused, refreshMainChart, refreshPowerChart, showMetric,
+} from './charts.js';
 import { initLogs, recordSample } from './logs.js';
-import { initJointCards, recordFaults, setConnection, updateJointCards, updateRate, updateTcpPose } from './panels.js';
+import {
+  addFaultEvent, initJointCards, setConnection, setFaultHistory,
+  updateJointCards, updateRate, updateTcpPose,
+} from './panels.js';
+import { socket } from './socket.js';
 import { byId, radToDeg } from './utils.js';
 
 let activeTab = 'home';
@@ -34,28 +43,37 @@ function onTelemetry(sample) {
   history.push(sample, positionsDeg);
 
   updateJointCards(sample);
-  recordFaults(sample);
   updateTcpPose(sample.tcp_pose);
+  if (activeTab === 'home') refreshPowerChart(sample);
   if (isMetricTab(activeTab)) refreshMainChart();
 }
 
 // ============================================================
-// ABAS
+// ABAS  (/monitor#fault abre direto a aba Fault History)
 // ============================================================
-function initTabs() {
-  const buttons = document.querySelectorAll('.tab-btn');
-  buttons.forEach((btn) => btn.addEventListener('click', () => {
-    activeTab = btn.dataset.tab;
-    buttons.forEach((b) => b.classList.toggle('active', b === btn));
-    document.querySelectorAll('.tab-content').forEach((s) => s.classList.remove('active'));
+function openTab(tab) {
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (!btn) return;
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn[data-tab]').forEach((b) => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.tab-content').forEach((s) => s.classList.remove('active'));
 
-    if (isMetricTab(activeTab)) {
-      byId('tab-telemetry').classList.add('active');
-      showMetric(activeTab);
-    } else {
-      byId(`tab-${activeTab}`).classList.add('active');
-    }
-  }));
+  if (isMetricTab(tab)) {
+    byId('tab-telemetry').classList.add('active');
+    showMetric(tab);
+  } else {
+    byId(`tab-${tab}`).classList.add('active');
+  }
+  byId('power-section').hidden = tab !== 'home';  // energia do robô só na Home
+}
+
+function initTabs() {
+  document.querySelectorAll('.tab-btn[data-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => openTab(btn.dataset.tab));
+  });
+  const fromHash = () => openTab(location.hash.slice(1));
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
 }
 
 // ============================================================
@@ -79,20 +97,15 @@ function initRobotControls() {
 }
 
 // ============================================================
-// SOCKET.IO
-// ============================================================
-function connectSocket() {
-  if (!window.io) return console.error('Biblioteca Socket.IO não foi carregada.');
-  const socket = window.io();
-  socket.on('connection_status', (state) => setConnection(state.connected, state.error));
-  socket.on('telemetry', onTelemetry);
-  socket.on('disconnect', () => setConnection(false, 'Servidor local desconectado'));
-}
-
-// ============================================================
 initJointCards();
+initPowerChart();
 initMainChart();
 initLogs();
 initTabs();
 initRobotControls();
-connectSocket();
+
+socket.on('connection_status', (state) => setConnection(state.connected, state.error));
+socket.on('telemetry', onTelemetry);
+socket.on('fault_history', setFaultHistory);
+socket.on('fault_event', addFaultEvent);
+socket.on('disconnect', () => setConnection(false, 'Servidor local desconectado'));

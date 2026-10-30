@@ -8,6 +8,10 @@ import { JOINT_NAMES } from './config.js';
 import { byId, el, formatTime } from './utils.js';
 
 const TCP_COLUMNS = ['tcp_x', 'tcp_y', 'tcp_z', 'tcp_rx', 'tcp_ry', 'tcp_rz'];
+const POWER_COLUMNS = [
+  ['main_voltage', 'tensao_principal_V'], ['robot_voltage', 'tensao_robo_V'],
+  ['robot_current', 'corrente_robo_A'], ['robot_power', 'potencia_W'], ['avg_power', 'potencia_media_W'],
+];
 const num = (v, digits) => (v == null ? '' : v.toFixed(digits));
 
 let recording = false;
@@ -34,13 +38,14 @@ export function recordSample(sample, positionsDeg) {
     );
   });
   row.push(...(sample.tcp_pose ? sample.tcp_pose.map((v) => v.toFixed(4)) : TCP_COLUMNS.map(() => '')));
+  row.push(...POWER_COLUMNS.map(([field]) => num(sample[field], 3)));
   lines.push(row.join(','));
 }
 
 function csvHeader() {
   const cols = ['timestamp'];
   JOINT_NAMES.forEach((n) => cols.push(`${n}_modo`, `${n}_temp_C`, `${n}_torque_Nm`, `${n}_corrente_A`, `${n}_pos_deg`));
-  return [...cols, ...TCP_COLUMNS].join(',');
+  return [...cols, ...TCP_COLUMNS, ...POWER_COLUMNS.map(([, name]) => name)].join(',');
 }
 
 function toggleRecording() {

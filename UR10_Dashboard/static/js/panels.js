@@ -2,16 +2,16 @@
  * Partes da interface que mostram a amostra atual:
  *  - status da conexão (cabeçalho)
  *  - cards das juntas (aba Home)
- *  - histórico de falhas (aba Fault History)
- *  - TCP pose (rodapé)
+ *  - histórico de falhas + popup Info (aba Fault History)
+ *  - TCP pose
  */
 
 import {
   JOINT_COLORS, JOINT_NAMES, METRICS, MODE_FAULT, MODE_RUNNING,
-  SPARK_LEN, TEMP_CRIT_C, TEMP_WARN_C,
+  POWER_METRICS, SPARK_LEN, TEMP_CRIT_C, TEMP_WARN_C,
 } from './config.js';
 import { createSparkline, history, updateSparkline } from './charts.js';
-import { byId, el, formatValue } from './utils.js';
+import { byId, el, formatValue, radToDeg } from './utils.js';
 
 // ============================================================
 // STATUS DA CONEXÃO
@@ -101,34 +101,121 @@ export function updateJointCards(sample) {
 }
 
 // ============================================================
-// HISTÓRICO DE FALHAS — cada (junta, código) aparece uma vez
+// HISTÓRICO DE FALHAS — eventos vêm do servidor (alarms.py)
+//   kind "fault"     -> junta em modo FAULT
+//   kind "threshold" -> limite excedido (action "alert" ou "stop")
 // ============================================================
-const recordedFaults = new Set();
+const ACTION_TEXT = { alert: '⚠ Alerta', stop: '⏹ STOP' };
+let faultCount = 0;
 
-export function recordFaults(sample) {
-  sample.joint_modes.forEach(({ code, label }, i) => {
-    const key = `${i}-${code}`;
-    if (code !== MODE_FAULT || recordedFaults.has(key)) return;
-    recordedFaults.add(key);
+export function addFaultEvent(event) {
+  const tbody = byId('fault-body');
+  tbody.querySelector('.empty-row')?.remove();
 
-    const tbody = byId('fault-body');
-    tbody.querySelector('.empty-row')?.remove();
-    tbody.prepend(el('tr', {}, [
-      el('td', { text: new Date().toLocaleTimeString() }),
-      el('td', { text: JOINT_NAMES[i], style: { color: JOINT_COLORS[i] } }),
-      el('td', {}, [el('span', { className: 'mode-badge fault', text: String(code) })]),
-      el('td', { text: `Alerta de estado de erro: ${label}` }),
-    ]));
-  });
+  const jointIndex = JOINT_NAMES.indexOf(event.joint);
+  const level = event.kind === 'fault' || event.action === 'stop' ? 'fault' : 'warn';
+
+  tbody.prepend(el('tr', { className: `fault-row ${level}` }, [
+    el('td', { text: new Date(event.time * 1000).toLocaleTimeString() }),
+    el('td', { text: event.joint, style: { color: JOINT_COLORS[jointIndex] } }),
+    el('td', {}, [el('span', { className: `mode-badge ${level}`, text: event.code })]),
+    el('td', { text: event.message }),
+    el('td', {}, [el('div', { className: 'action-cell' }, [
+      el('span', { className: `action-tag ${event.action || 'none'}`, text: ACTION_TEXT[event.action] || '—' }),
+      infoButton(event),
+    ])]),
+  ]));
+
+  faultCount += 1;
+  const badge = byId('fault-count');
+  badge.hidden = false;
+  badge.textContent = faultCount;
+}
+
+export function setFaultHistory(events) {
+  faultCount = 0;
+  byId('fault-body').replaceChildren(
+    el('tr', { className: 'empty-row' }, [el('td', { text: 'Nenhum registro de falha detectado.', attrs: { colspan: '5' } })]),
+  );
+  byId('fault-count').hidden = true;
+  events.forEach(addFaultEvent);
 }
 
 // ============================================================
-// TCP POSE  (X, Y, Z em metros; RX, RY, RZ em radianos)
+// POPUP INFO — "foto" do robô no momento do evento (event.snapshot,
+// montado em alarms.py com os campos de SNAPSHOT_FIELDS)
 // ============================================================
-const POSE_AXES = ['x', 'y', 'z', 'rx', 'ry', 'rz'];
+const infoModal = byId('info-modal');
+byId('info-close').addEventListener('click', () => infoModal.close());
+byId('info-ok').addEventListener('click', () => infoModal.close());
+infoModal.addEventListener('click', (e) => { if (e.target === infoModal) infoModal.close(); }); // clique fora fecha
+
+function infoButton(event) {
+  const btn = el('button', { className: 'info-btn', text: 'Info', attrs: { type: 'button' } });
+  if (event.snapshot) btn.addEventListener('click', () => openFaultInfo(event));
+  else Object.assign(btn, { disabled: true, title: 'Evento sem dados registrados' });
+  return btn;
+}
+
+/** Colunas da tabela de juntas do popup: campo da snapshot -> formatação */
+const INFO_COLUMNS = [
+  { field: 'joint_positions', format: (v) => formatValue(v == null ? null : radToDeg(v), 2, '°') },
+  { field: 'torque',          format: (v) => formatValue(v, 2, 'Nm') },
+  { field: 'current',         format: (v) => formatValue(v, 3, 'A') },
+  { field: 'temperature',     format: (v) => formatValue(v, 1, '°C') },
+  { field: 'joint_voltage',   format: (v) => formatValue(v, 1, 'V') },
+];
+
+const INFO_POWER = [
+  ...POWER_METRICS.slice(0, 3),
+  { field: 'robot_power', label: 'Potência instantânea', unit: 'W', digits: 1 },
+  POWER_METRICS[3],
+];
+
+function openFaultInfo(event) {
+  const snap = event.snapshot;
+  const isStop = event.kind === 'fault' || event.action === 'stop';
+  infoModal.classList.toggle('level-stop', isStop);
+
+  byId('info-kicker').textContent = event.kind === 'fault'
+    ? `✖ FALHA DE JUNTA · ${event.code}`
+    : `${ACTION_TEXT[event.action] || ''} · ${event.metric.toUpperCase()}`;
+  byId('info-title').textContent = event.joint;
+  byId('info-message').textContent = event.message;
+  byId('info-time').textContent = new Date(event.time * 1000).toLocaleString();
+
+  // Tabela das juntas: destaca a junta do evento e a métrica que passou do limite
+  byId('info-joints').replaceChildren(...JOINT_NAMES.map((name, i) => {
+    const isEventJoint = name === event.joint;
+    return el('tr', { className: isEventJoint ? 'is-event' : '' }, [
+      el('td', {}, [el('span', { className: 'info-dot', style: { background: JOINT_COLORS[i] } }), name]),
+      ...INFO_COLUMNS.map(({ field, format }) => el('td', {
+        text: format(snap[field]?.[i]),
+        className: isEventJoint && field === event.field ? 'is-over' : '',
+      })),
+    ]);
+  }));
+
+  byId('info-tcp').replaceChildren(...POSE_LABELS.map((axis, i) => infoItem(axis, snap.tcp_pose ? poseText(snap.tcp_pose[i], i) : '—')));
+  byId('info-power').replaceChildren(...INFO_POWER.map((m) => infoItem(m.label, formatValue(snap[m.field], m.digits, m.unit))));
+
+  infoModal.showModal();
+}
+
+const infoItem = (label, value) => el('div', { className: 'info-item' }, [
+  el('span', { className: 'reading-label', text: label }),
+  el('span', { className: 'info-value', text: value }),
+]);
+
+// ============================================================
+// TCP POSE em relação à base — como no PolyScope:
+// X, Y, Z em mm; RX, RY, RZ (vetor de rotação) em rad
+// ============================================================
+const POSE_LABELS = ['X', 'Y', 'Z', 'RX', 'RY', 'RZ'];
+const poseText = (v, i) => (i < 3 ? `${(v * 1000).toFixed(2)} mm` : `${v.toFixed(3)} rad`);
 
 export function updateTcpPose(pose) {
   if (!pose) return;
   byId('pose-panel').hidden = false;
-  POSE_AXES.forEach((axis, i) => { byId(`pose-${axis}`).textContent = pose[i].toFixed(4); });
+  POSE_LABELS.forEach((axis, i) => { byId(`pose-${axis.toLowerCase()}`).textContent = poseText(pose[i], i); });
 }

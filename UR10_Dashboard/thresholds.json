@@ -1,0 +1,35 @@
+{
+  "current": {
+    "action": "alert",
+    "limits": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "torque": {
+    "action": "alert",
+    "limits": [
+      null,
+      40.0,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "temperature": {
+    "action": "alert",
+    "limits": [
+      60.0,
+      60.0,
+      60.0,
+      60.0,
+      60.0,
+      60.0
+    ]
+  }
+}

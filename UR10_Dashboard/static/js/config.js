@@ -24,6 +24,19 @@ export const METRICS = {
   temp:    { field: 'temperature', title: 'EVOLUÇÃO DE TEMPERATURA NO TEMPO', unit: '°C', digits: 1 },
 };
 
+/**
+ * Gráfico "Energia do robô" (aba Home, abaixo do TCP Pose).
+ * `field` é o campo no evento `telemetry` (robot.py -> read()).
+ * Cada unidade (V, A, W) tem o próprio eixo Y no gráfico.
+ */
+export const POWER_METRICS = [
+  { field: 'main_voltage',  label: 'Tensão principal', unit: 'V', digits: 1, color: '#a06ee1' },
+  { field: 'robot_voltage', label: 'Tensão do robô',   unit: 'V', digits: 1, color: '#5b8fd9' },
+  { field: 'robot_current', label: 'Corrente do robô', unit: 'A', digits: 2, color: '#45d6a8' },
+  { field: 'avg_power',     label: 'Potência média',   unit: 'W', digits: 1, color: '#ffb020' },
+];
+export const POWER_WINDOW = 600;  // pontos visíveis no gráfico de energia (~60 s a 10 Hz)
+
 export const BUFFER_LEN = 3000;  // amostras guardadas (~5 min a 10 Hz)
 export const LIVE_WINDOW = 200;  // amostras visíveis no modo "ao vivo"
 export const SPARK_LEN = 100;    // pontos do mini-gráfico dos cards

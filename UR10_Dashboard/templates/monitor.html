@@ -1,27 +1,19 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UR10 · Telemetria RTDE</title>
+{% extends "base.html" %}
+{% block title %}UR10 · Telemetria RTDE{% endblock %}
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
-  <!-- Bibliotecas externas (versões fixas) -->
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+{% block head %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-</head>
-<body>
+{% endblock %}
 
+{% block content %}
 <!-- ======================= CABEÇALHO ======================= -->
 <header>
   <div class="header-top">
     <div class="brand">
-      <span class="model">UR10 · RTDE</span>
+      <a class="back-link" href="/" title="Voltar ao início">←</a>
+      <span class="model">RTDE · Dashboard</span>
       <span class="sub">Telemetria em tempo real</span>
     </div>
 
@@ -60,8 +52,9 @@
     <button type="button" class="tab-btn" data-tab="torque">Torque</button>
     <button type="button" class="tab-btn" data-tab="current">Current</button>
     <button type="button" class="tab-btn" data-tab="temp">Temperature</button>
-    <button type="button" class="tab-btn" data-tab="fault">Fault History</button>
+    <button type="button" class="tab-btn" data-tab="fault">Fault History <span class="tab-count" id="fault-count" hidden></span></button>
     <button type="button" class="tab-btn" data-tab="logs">Logs</button>
+    <a class="tab-btn tab-link" href="/config">⚙ Limites</a>
   </nav>
 </header>
 
@@ -79,7 +72,7 @@
   <section id="tab-telemetry" class="tab-content">
     <div class="telemetry-layout">
       <aside class="joint-selector">
-        <div class="selector-title">Exibir Juntas</div>
+        <div class="selector-title">JOINTS</div>
         <div id="joint-buttons" class="joint-buttons"></div>
       </aside>
 
@@ -104,13 +97,14 @@
   </section>
 
   <!-- =================== ABA: FAULT HISTORY =================== -->
+  <!-- Eventos vêm do servidor (alarms.py): falhas de junta e limites excedidos -->
   <section id="tab-fault" class="tab-content">
     <table class="data-table">
       <thead>
-        <tr><th>Horário</th><th>Junta</th><th>Código</th><th>Mensagem</th></tr>
+        <tr><th>Horário</th><th>Junta</th><th>Tipo</th><th>Detalhe</th><th>Ação</th></tr>
       </thead>
       <tbody id="fault-body">
-        <tr class="empty-row"><td colspan="4">Nenhum registro de falha detectado.</td></tr>
+        <tr class="empty-row"><td colspan="5">Nenhum registro de falha detectado.</td></tr>
       </tbody>
     </table>
   </section>
@@ -135,12 +129,67 @@
     <span class="pose-val"><span>{{ axis | upper }}</span><span id="pose-{{ axis }}">—</span></span>
     {% endfor %}
   </div>
+
+  <!-- ============ ENERGIA DO ROBÔ (só na aba Home) ============ -->
+  <!-- Gráfico único em js/charts.js (parâmetros em POWER_METRICS, js/config.js) -->
+  <section class="telemetry-layout power-section" id="power-section">
+    <aside class="joint-selector">
+      <div class="selector-title">Parameters</div>
+      <div id="power-buttons" class="joint-buttons"></div>
+    </aside>
+
+    <div>
+      <div class="chart-header">
+        <div class="titles">
+          <div class="chart-title">Historical Energy Usage</div>
+          <div class="chart-subtitle">Últimos 60 s · potência = tensão × corrente do robô (média móvel ~5 s) · um eixo por unidade (V, A, W)</div>
+        </div>
+      </div>
+      <div class="main-chart-container power-chart-container">
+        <canvas id="power-chart"></canvas>
+      </div>
+    </div>
+  </section>
 </main>
 
-<footer>UR10 Dashboard · gerado localmente</footer>
+<!-- ============ POPUP INFO (botão "Info" do Fault History) ============ -->
+<dialog class="info-modal" id="info-modal">
+  <div class="info-head">
+    <div>
+      <div class="info-kicker" id="info-kicker"></div>
+      <h2 class="info-title" id="info-title"></h2>
+      <p class="info-message" id="info-message"></p>
+    </div>
+    <button type="button" class="info-close" id="info-close" aria-label="Fechar">✕</button>
+  </div>
 
-<!-- Configuração vinda do app.py (FRONTEND_CONFIG) -->
-<script id="app-config" type="application/json">{{ frontend_config | tojson }}</script>
+  <div class="info-body">
+    <h3 class="info-section">Juntas no momento do evento</h3>
+    <div class="table-scroll">
+      <table class="info-table">
+        <thead>
+          <tr><th>Junta</th><th>Posição</th><th>Torque</th><th>Corrente</th><th>Temp.</th><th>Tensão</th></tr>
+        </thead>
+        <tbody id="info-joints"></tbody>
+      </table>
+    </div>
+
+    <h3 class="info-section">TCP em relação à base</h3>
+    <div class="info-grid" id="info-tcp"></div>
+
+    <h3 class="info-section">Energia do robô</h3>
+    <div class="info-grid" id="info-power"></div>
+  </div>
+
+  <div class="info-foot">
+    <span class="info-time" id="info-time"></span>
+    <button type="button" class="btn-solid" id="info-ok">Fechar</button>
+  </div>
+</dialog>
+
+<footer>UR10 Dashboard · Created by Elison Maiko</footer>
+{% endblock %}
+
+{% block scripts %}
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+{% endblock %}

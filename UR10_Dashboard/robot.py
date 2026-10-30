@@ -9,6 +9,7 @@ Comunicação com o UR10.
 import logging
 import threading
 import time
+from collections import deque
 
 from dashboard_client import DashboardClient
 from rtde_receive import RTDEReceiveInterface
@@ -22,6 +23,7 @@ JOINT_MODE_MAP = {
 }
 
 COMMANDS = ("play", "pause", "stop")
+POWER_AVG_SAMPLES = 50  # média da potência: últimas 50 leituras (~5 s a 10 Hz)
 
 
 class Robot:
@@ -31,6 +33,7 @@ class Robot:
         self.rtde = None
         self.dashboard = None
         self._lock = threading.Lock()  # o DashboardClient é usado por várias threads HTTP
+        self._power = deque(maxlen=POWER_AVG_SAMPLES)
 
     # ------------------------------------------------------------- status
 
@@ -88,6 +91,14 @@ class Robot:
         r = self.rtde
         tcp_pose = r.getActualTCPPose()
         joint_positions = r.getActualQ()
+
+        # Energia (equivalente à aba "Readings" do PolyScope). O RTDE não envia
+        # potência: calculamos P = V × I e a média móvel das últimas leituras.
+        robot_voltage = r.getActualRobotVoltage()
+        robot_current = r.getActualRobotCurrent()
+        power = robot_voltage * robot_current
+        self._power.append(power)
+
         return {
             "timestamp": time.time(),
             "joint_modes": [
@@ -98,7 +109,13 @@ class Robot:
             "torque": list(r.getTargetMoment()),            # Nm
             "current": list(r.getActualCurrent()),          # A
             "joint_positions": list(joint_positions) if joint_positions else None,  # rad
-            "tcp_pose": list(tcp_pose) if tcp_pose else None,  # m / rad
+            "tcp_pose": list(tcp_pose) if tcp_pose else None,  # m / rad (em relação à base)
+            "joint_voltage": list(r.getActualJointVoltage()),  # V, por junta
+            "main_voltage": r.getActualMainVoltage(),          # V, alimentação da caixa de controle
+            "robot_voltage": robot_voltage,                    # V, alimentação do braço
+            "robot_current": robot_current,                    # A, corrente total do braço
+            "robot_power": power,                              # W, instantânea
+            "avg_power": sum(self._power) / len(self._power),  # W, média móvel
         }
 
     # ---------------------------------------------------------- comandos
@@ -114,24 +131,30 @@ class Robot:
         log.info("Comando executado: %s", action)
 
 
-def poll_loop(robot, socketio, hz, retry_delay=2.0):
-    """Loop em segundo plano: lê o RTDE e envia `telemetry` aos navegadores."""
+def poll_loop(robot, hz, on_sample, on_status, retry_delay=2.0):
+    """Loop em segundo plano: lê o RTDE e chama on_sample(amostra) a cada leitura.
+    on_status() é chamado quando a conexão muda."""
     time.sleep(1.0)
     while True:
         if not robot.connected:
             ok = robot.connect()
-            socketio.emit("connection_status", robot.status())
+            on_status()
             if not ok:
                 time.sleep(retry_delay)
                 continue
 
         try:
-            socketio.emit("telemetry", robot.read())
+            sample = robot.read()
         except Exception as exc:
             log.error("Erro ao ler telemetria: %s", exc)
             robot.rtde, robot.error = None, str(exc)
-            socketio.emit("connection_status", robot.status())
+            on_status()
             time.sleep(retry_delay)
             continue
+
+        try:
+            on_sample(sample)
+        except Exception:
+            log.exception("Erro ao processar amostra")
 
         time.sleep(1.0 / hz)

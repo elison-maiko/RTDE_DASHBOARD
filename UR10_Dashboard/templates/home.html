@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}UR10 · Início{% endblock %}
+{% block body_class %}page-home{% endblock %}
+
+{% block content %}
+<main class="home">
+  <div class="home-brand">
+    <span class="home-model">RTDE · Dashboard</span>
+    <span class="home-sub">Painel de monitoramento e segurança</span>
+    <span class="pill wait home-status" id="conn-pill">
+      <span class="dot"></span><span id="conn-label">Conectando a {{ ip }}…</span>
+    </span>
+  </div>
+
+  <div class="home-options">
+    <a class="option-card" href="/monitor">
+      <span class="option-icon">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+      </span>
+      <span class="option-title">Monitoramento via RTDE</span>
+      <span class="option-desc">Torque, corrente e temperatura das juntas em tempo real, gráficos, logs e histórico de falhas.</span>
+      <span class="option-go">Abrir monitor →</span>
+    </a>
+
+    <a class="option-card" href="/config">
+      <span class="option-icon">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+      </span>
+      <span class="option-title">Set Configurations</span>
+      <span class="option-desc">Limites de corrente, torque e temperatura por junta e a ação ao atingir: alerta ou parada do programa.</span>
+      <span class="option-go">Configurar limites →</span>
+    </a>
+  </div>
+</main>
+
+<footer class="home-footer">Created by Elison Maiko</footer>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/home.js') }}"></script>
+{% endblock %}
