@@ -15,8 +15,8 @@ export const TEMP_CRIT_C = server.tempCritC;
 export const JOINT_COLORS = ['#ffb020', '#45d6a8', '#5b8fd9', '#ff5a5f', '#a06ee1', '#00f2fe'];
 
 /**
- * Métricas do gráfico grande. A chave é o `data-tab` da aba no index.html;
- * `field` é o nome do campo no evento `telemetry` (robot.py -> read()).
+ * Métricas do gráfico grande. A chave é o `data-tab` da aba no monitor.html;
+ * `field` é o nome do campo no evento `telemetry` (rtde_data_receive/robot.py -> read()).
  */
 export const METRICS = {
   torque:  { field: 'torque',      title: 'EVOLUÇÃO DE TORQUE NO TEMPO',      unit: 'Nm', digits: 2 },
@@ -26,7 +26,7 @@ export const METRICS = {
 
 /**
  * Gráfico "Energia do robô" (aba Home, abaixo do TCP Pose).
- * `field` é o campo no evento `telemetry` (robot.py -> read()).
+ * `field` é o campo no evento `telemetry` (rtde_data_receive/robot.py -> read()).
  * Cada unidade (V, A, W) tem o próprio eixo Y no gráfico.
  */
 export const POWER_METRICS = [

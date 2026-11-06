@@ -101,7 +101,7 @@ export function updateJointCards(sample) {
 }
 
 // ============================================================
-// HISTÓRICO DE FALHAS — eventos vêm do servidor (alarms.py)
+// HISTÓRICO DE FALHAS — eventos vêm do servidor (safety/alarms.py)
 //   kind "fault"     -> junta em modo FAULT
 //   kind "threshold" -> limite excedido (action "alert" ou "stop")
 // ============================================================
@@ -143,7 +143,7 @@ export function setFaultHistory(events) {
 
 // ============================================================
 // POPUP INFO — "foto" do robô no momento do evento (event.snapshot,
-// montado em alarms.py com os campos de SNAPSHOT_FIELDS)
+// montado em safety/alarms.py com os campos de SNAPSHOT_FIELDS)
 // ============================================================
 const infoModal = byId('info-modal');
 byId('info-close').addEventListener('click', () => infoModal.close());

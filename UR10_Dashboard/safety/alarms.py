@@ -1,38 +1,44 @@
 """
-Limites (thresholds) de corrente, torque e temperatura + histórico de falhas.
+Limites de segurança: corrente, torque e temperatura de cada junta.
 
-- Os limites ficam salvos em thresholds.json (editados na página /config).
-- check() é chamado a cada amostra e retorna os eventos NOVOS:
-    * "threshold": uma junta passou do limite de uma métrica
-    * "fault":     uma junta entrou em modo FAULT (252)
-  Cada evento só dispara na subida (quando passa do limite), não a cada leitura.
+- Os limites são editados na página /config e salvos em thresholds.json.
+- check() é chamado a cada amostra e devolve só os eventos NOVOS:
+    "threshold" -> uma junta passou do limite de corrente, torque ou temperatura
+    "fault"     -> uma junta entrou em modo FAULT (252)
+- Um evento dispara uma vez, quando o valor passa do limite. Só volta a
+  disparar depois que o valor cai abaixo de 95% do limite.
+- Ação de cada métrica: "alert" (só popup) ou "stop" (para o programa + popup).
 """
 
 import json
-import os
+import logging
 import threading
 import time
 from collections import deque
 
-# chave -> (campo no payload do robot.read(), nome, unidade, compara valor absoluto?)
+log = logging.getLogger("alarms")
+
+# Métricas que podem ter limite. A chave é o mesmo nome do campo na amostra (robot.read()).
+# use_abs = compara o valor sem sinal (torque de -45 Nm também passa de um limite de 40 Nm)
 METRICS = {
-    "current":     ("current",     "Corrente",    "A",  True),
-    "torque":      ("torque",      "Torque",      "Nm", True),
-    "temperature": ("temperature", "Temperatura", "°C", False),
+    "current":     {"label": "Corrente",    "unit": "A",  "use_abs": True},
+    "torque":      {"label": "Torque",      "unit": "Nm", "use_abs": True},
+    "temperature": {"label": "Temperatura", "unit": "°C", "use_abs": False},
 }
 
-ACTIONS = ("alert", "stop")   # alert = só popup | stop = parar programa + popup
-HYSTERESIS = 0.05             # volta ao normal só abaixo de 95% do limite (evita repetição)
-HISTORY_LEN = 500
+ACTIONS = ("alert", "stop")
+RESET_BELOW = 0.95   # o alarme "rearma" quando o valor cai abaixo de 95% do limite
+HISTORY_SIZE = 500   # quantos eventos o Fault History guarda
 
-# Campos da amostra guardados junto com cada evento (popup Info do Fault History)
-SNAPSHOT_FIELDS = (
+# Dados da amostra guardados junto com cada evento (popup "Info" do Fault History)
+SNAPSHOT_FIELDS = [
     "temperature", "torque", "current", "joint_positions", "joint_voltage", "tcp_pose",
     "main_voltage", "robot_voltage", "robot_current", "robot_power", "avg_power",
-)
+]
 
 
 def default_config(joint_count):
+    """Limites usados quando ainda não existe thresholds.json."""
     return {
         "current":     {"action": "alert", "limits": [None] * joint_count},
         "torque":      {"action": "alert", "limits": [None] * joint_count},
@@ -45,107 +51,192 @@ class Alarms:
         self.path = path
         self.joint_names = joint_names
         self.mode_fault = mode_fault
-        self._lock = threading.Lock()
-        self._active = set()  # (junta, chave) que estão acima do limite agora
-        self.history = deque(maxlen=HISTORY_LEN)
-        self.config = self._load()
 
-    # ---------------------------------------------------------- configuração
+        # Alarmes que estão disparados agora, ex: (1, "torque") = J2 acima do limite de torque
+        self.active = set()
 
-    def _load(self):
+        self.history = deque(maxlen=HISTORY_SIZE)
+        self.lock = threading.Lock()  # check() e save() rodam em threads diferentes
+        self.config = self.load()
+
+    # ==================================================================
+    # Configuração (thresholds.json)
+    # ==================================================================
+
+    def load(self):
         try:
-            with open(self.path, encoding="utf-8") as f:
-                return self.validate(json.load(f))
+            with open(self.path, encoding="utf-8") as file:
+                return self.validate(json.load(file))
         except (OSError, ValueError):
             return default_config(len(self.joint_names))
 
     def save(self, data):
-        """Valida e salva. Lança ValueError se os dados forem inválidos."""
+        """Valida e salva os limites vindos da página /config.
+        Lança ValueError se algum valor for inválido."""
         config = self.validate(data)
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-        with self._lock:
+
+        with open(self.path, "w", encoding="utf-8") as file:
+            json.dump(config, file, indent=2)
+
+        with self.lock:
             self.config = config
-            # reavalia os limites com os novos valores (falhas de junta continuam registradas)
-            self._active = {k for k in self._active if k[1] == "fault"}
+            # Com limites novos, os alarmes de limite começam do zero.
+            # Os alarmes de FAULT continuam como estão.
+            for alarm in list(self.active):
+                if alarm[1] != "fault":
+                    self.active.remove(alarm)
 
     def validate(self, data):
-        n = len(self.joint_names)
+        """Confere o formato dos limites e devolve uma versão limpa."""
+        joint_count = len(self.joint_names)
         config = {}
-        for key in METRICS:
-            item = data.get(key) or {}
+
+        for metric in METRICS:
+            item = data.get(metric) or {}
             action = item.get("action", "alert")
             limits = item.get("limits", [])
+
             if action not in ACTIONS:
-                raise ValueError(f"{key}: ação inválida '{action}'")
-            if not isinstance(limits, list) or len(limits) != n:
-                raise ValueError(f"{key}: são necessários {n} limites")
-            clean = []
-            for v in limits:
-                if v in (None, ""):
-                    clean.append(None)  # vazio = desativado
+                raise ValueError(f"{metric}: ação inválida '{action}'")
+            if not isinstance(limits, list) or len(limits) != joint_count:
+                raise ValueError(f"{metric}: são necessários {joint_count} limites")
+
+            clean_limits = []
+            for value in limits:
+                if value is None or value == "":
+                    clean_limits.append(None)  # campo vazio = limite desligado
                     continue
-                v = float(v)
-                if v <= 0:
-                    raise ValueError(f"{key}: limites devem ser positivos")
-                clean.append(v)
-            config[key] = {"action": action, "limits": clean}
+                value = float(value)
+                if value <= 0:
+                    raise ValueError(f"{metric}: os limites devem ser positivos")
+                clean_limits.append(value)
+
+            config[metric] = {"action": action, "limits": clean_limits}
+
         return config
 
-    # -------------------------------------------------------------- checagem
+    # ==================================================================
+    # Checagem de cada amostra
+    # ==================================================================
 
     def check(self, sample):
-        """Compara a amostra com os limites. Retorna a lista de eventos novos."""
-        events = []
-        with self._lock:
-            for i, name in enumerate(self.joint_names):
-                # Modo FAULT da junta
-                mode = sample["joint_modes"][i]
-                in_fault = mode["code"] == self.mode_fault
-                if self._rising((i, "fault"), in_fault, not in_fault):
-                    events.append(self._event("fault", name, f"FAULT {mode['code']}",
-                                              f"Junta em estado de erro: {mode['label']}"))
+        """Compara a amostra com os limites. Devolve a lista de eventos novos."""
+        new_events = []
 
-                # Limites de corrente / torque / temperatura
-                for key, (field, label, unit, use_abs) in METRICS.items():
-                    limit = self.config[key]["limits"][i]
-                    value = sample[field][i]
-                    if limit is None or value is None:
-                        self._active.discard((i, key))
-                        continue
-                    v = abs(value) if use_abs else value
-                    if self._rising((i, key), v > limit, v < limit * (1 - HYSTERESIS)):
-                        limit_text = f"{'±' if use_abs else ''}{limit:g} {unit}"
-                        events.append(self._event(
-                            "threshold", name, label.upper(),
-                            f"{label} de {value:.2f} {unit} ultrapassou o limite de {limit_text}",
-                            action=self.config[key]["action"], metric=label, field=field,
-                            value=value, unit=unit, limit=limit, limit_text=limit_text,
-                        ))
+        with self.lock:
+            for joint in range(len(self.joint_names)):
+                event = self.check_joint_fault(joint, sample)
+                if event:
+                    new_events.append(event)
 
-            # "Foto" do robô no momento do evento (botão Info do Fault History)
-            if events:
-                snapshot = {k: sample.get(k) for k in SNAPSHOT_FIELDS}
-                for event in events:
+                for metric in METRICS:
+                    event = self.check_limit(joint, metric, sample)
+                    if event:
+                        new_events.append(event)
+
+            # Guarda uma "foto" do robô neste instante em cada evento
+            if new_events:
+                snapshot = {}
+                for field in SNAPSHOT_FIELDS:
+                    snapshot[field] = sample.get(field)
+                for event in new_events:
                     event["snapshot"] = snapshot
 
-            self.history.extend(events)
-        return events
+            self.history.extend(new_events)
 
-    def _rising(self, key, above, below):
-        """True só no momento em que passa a ficar acima; volta a armar quando fica abaixo."""
-        if above and key not in self._active:
-            self._active.add(key)
-            return True
-        if below:
-            self._active.discard(key)
-        return False
+        return new_events
 
-    @staticmethod
-    def _event(kind, joint, code, message, **extra):
-        return {"time": time.time(), "kind": kind, "joint": joint, "code": code,
-                "message": message, "action": None, **extra}
+    def check_joint_fault(self, joint, sample):
+        """Evento quando a junta entra em modo FAULT."""
+        mode = sample["joint_modes"][joint]
+        alarm = (joint, "fault")
+
+        if mode["code"] != self.mode_fault:
+            self.active.discard(alarm)  # saiu do FAULT
+            return None
+
+        if alarm in self.active:
+            return None  # já estava em FAULT, já foi registrado
+
+        self.active.add(alarm)
+        return self.new_event(
+            kind="fault",
+            joint=joint,
+            code=f"FAULT {mode['code']}",
+            message=f"Junta em estado de erro: {mode['label']}",
+        )
+
+    def check_limit(self, joint, metric, sample):
+        """Evento quando a junta passa do limite de uma métrica."""
+        limit = self.config[metric]["limits"][joint]
+        value = sample[metric][joint]
+        alarm = (joint, metric)
+
+        if limit is None or value is None:
+            self.active.discard(alarm)  # limite desligado
+            return None
+
+        info = METRICS[metric]
+        if info["use_abs"]:
+            compared = abs(value)
+        else:
+            compared = value
+
+        # Alarme já disparado: espera o valor baixar para rearmar
+        if alarm in self.active:
+            if compared < limit * RESET_BELOW:
+                self.active.remove(alarm)
+            return None
+
+        if compared <= limit:
+            return None  # tudo normal
+
+        # Passou do limite agora
+        self.active.add(alarm)
+
+        unit = info["unit"]
+        if info["use_abs"]:
+            limit_text = f"±{limit:g} {unit}"
+        else:
+            limit_text = f"{limit:g} {unit}"
+
+        event = self.new_event(
+            kind="threshold",
+            joint=joint,
+            code=info["label"].upper(),
+            message=f"{info['label']} de {value:.2f} {unit} ultrapassou o limite de {limit_text}",
+        )
+        event["action"] = self.config[metric]["action"]
+        event["metric"] = info["label"]
+        event["field"] = metric
+        event["value"] = value
+        event["unit"] = unit
+        event["limit"] = limit
+        event["limit_text"] = limit_text
+        return event
+
+    def new_event(self, kind, joint, code, message):
+        return {
+            "time": time.time(),
+            "kind": kind,
+            "joint": self.joint_names[joint],
+            "code": code,
+            "message": message,
+            "action": None,
+        }
 
     def history_list(self):
-        with self._lock:
+        with self.lock:
             return list(self.history)
+
+
+def stop_robot(robot, event):
+    """Executa a ação STOP de um evento e anota no evento se deu certo."""
+    try:
+        robot.send_command("stop")
+        event["stopped"] = True
+        event["message"] += " — programa parado"
+    except Exception as error:
+        event["stopped"] = False
+        event["message"] += f" — FALHA ao parar: {error}"
+        log.error("Não foi possível parar o programa: %s", error)

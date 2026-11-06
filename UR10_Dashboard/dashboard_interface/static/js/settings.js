@@ -1,6 +1,6 @@
 /**
  * Página /config: tabela de limites por junta e ação por métrica.
- * Lê e salva em /api/thresholds (alarms.py -> thresholds.json).
+ * Lê e salva em /api/thresholds (safety/alarms.py -> thresholds.json).
  */
 
 import { JOINT_NAMES } from './config.js';

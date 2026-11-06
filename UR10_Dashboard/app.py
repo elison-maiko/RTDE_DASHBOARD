@@ -1,168 +1,89 @@
 """
-RTDE Telemetry Dashboard — servidor web.
+UR10 Dashboard — arquivo principal. Só junta as peças e liga o servidor.
 
     python app.py                               # URSim local (127.0.0.1)
     $env:UR_IP="192.168.1.10"; python app.py    # robô real
 
-Páginas:  /  (início)   /monitor  (telemetria)   /config  (limites)
+Pastas:
+    rtde_data_receive/    conexão com o robô e leitura dos dados (RTDE)
+    safety/               limites de segurança e histórico de falhas
+    routes/               páginas, API e envio dos dados em tempo real
+    dashboard_interface/  HTML, CSS e JavaScript da tela
+
+Caminho de uma leitura:
+    acquisition_loop (rtde_data_receive) -> robot.read() -> Realtime.on_new_sample (routes)
+    -> navegador + alarms.check (safety)
 """
 
 import logging
 import os
 import threading
-from collections import deque
 
-from flask import Flask, jsonify, render_template, request
-from flask_socketio import SocketIO, emit
+from flask import Flask
+from flask_socketio import SocketIO
 
-from alarms import Alarms
-from robot import Robot, poll_loop
+from routes.http_routes import register_routes
+from routes.realtime import Realtime
+from rtde_data_receive.acquisition import acquisition_loop
+from rtde_data_receive.robot import Robot
+from safety.alarms import Alarms
 
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
 UR_IP = os.environ.get("UR_IP", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "5000"))
-POLL_HZ = 10          # leituras por segundo
-THRESHOLDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "thresholds.json")
-HISTORY_SAMPLES = 3000  # amostras guardadas para os gráficos (~5 min a 10 Hz) = BUFFER_LEN em static/js/config.js
+READS_PER_SECOND = 10
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+THRESHOLDS_FILE = os.path.join(BASE_DIR, "thresholds.json")
+
+# Amostras guardadas para os gráficos (~5 min a 10 leituras/s).
+# Mesmo valor de BUFFER_LEN em dashboard_interface/static/js/config.js
+CHART_HISTORY_SIZE = 3000
 
 JOINT_NAMES = ["J1 (Base)", "J2 (Shoulder)", "J3 (Elbow)",
                "J4 (Wrist 1)", "J5 (Wrist 2)", "J6 (Wrist 3)"]
 MODE_RUNNING = 253
 MODE_FAULT = 252
 
-# Enviado ao navegador (lido em static/js/config.js)
+# Enviado ao navegador (lido em dashboard_interface/static/js/config.js)
 FRONTEND_CONFIG = {
     "jointNames": JOINT_NAMES,
     "modeRunning": MODE_RUNNING,
     "modeFault": MODE_FAULT,
-    "tempWarnC": 50,  # cor amarela no card acima disso
-    "tempCritC": 60,  # cor vermelha no card acima disso
+    "tempWarnC": 50,  # card amarelo acima disso
+    "tempCritC": 60,  # card vermelho acima disso
 }
 
 # ============================================================
-# APP
+# MONTAGEM
 # ============================================================
 logging.basicConfig(level=logging.INFO, format="[dashboard] %(levelname)s %(name)s: %(message)s")
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder="dashboard_interface/templates",
+    static_folder="dashboard_interface/static",
+)
 app.config["SECRET_KEY"] = "ur10-dashboard"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
-robot = Robot(UR_IP)
-alarms = Alarms(THRESHOLDS_FILE, JOINT_NAMES, MODE_FAULT)
 
-# Histórico dos gráficos fica no servidor: cada página que abre recebe as últimas
-# amostras, então nada se perde ao ir para /config e voltar (ou recarregar).
-CHART_FIELDS = ("timestamp", "temperature", "torque", "current", "joint_positions",
-                "main_voltage", "robot_voltage", "robot_current", "avg_power")
-chart_history = deque(maxlen=HISTORY_SAMPLES)
-chart_history_lock = threading.Lock()
+robot = Robot(UR_IP)                                     # rtde_data_receive
+alarms = Alarms(THRESHOLDS_FILE, JOINT_NAMES, MODE_FAULT)  # safety
 
-
-def chart_point(sample):
-    """Só os campos usados nos gráficos, arredondados (deixa o envio inicial leve)."""
-    def rnd(v):
-        if isinstance(v, list):
-            return [None if x is None else round(x, 4) for x in v]
-        return None if v is None else round(v, 4)
-    return {k: sample.get(k) if k == "timestamp" else rnd(sample.get(k)) for k in CHART_FIELDS}
-
-
-@app.context_processor
-def inject_globals():
-    """Variáveis disponíveis em todos os templates."""
-    return {"ip": UR_IP, "frontend_config": FRONTEND_CONFIG}
-
-
-# ============================================================
-# PÁGINAS
-# ============================================================
-@app.route("/")
-def home():
-    return render_template("home.html")
-
-
-@app.route("/monitor")
-def monitor():
-    return render_template("monitor.html")
-
-
-@app.route("/config")
-def config_page():
-    return render_template("config.html")
-
-
-# ============================================================
-# API
-# ============================================================
-@app.route("/api/status")
-def status():
-    return jsonify(robot.status())
-
-
-@app.route("/api/control/<action>", methods=["POST"])
-def control_action(action):
-    """Play / Pause / Stop do programa via Dashboard Server."""
-    try:
-        robot.send_command(action)
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
-    except Exception as exc:
-        logging.error("Erro ao executar comando %s: %s", action, exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
-    return jsonify({"status": "ok", "action": action})
-
-
-@app.route("/api/thresholds", methods=["GET", "POST"])
-def thresholds():
-    if request.method == "GET":
-        return jsonify(alarms.config)
-    try:
-        alarms.save(request.get_json(force=True))
-    except (ValueError, TypeError) as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
-    return jsonify({"status": "ok"})
-
-
-# ============================================================
-# TEMPO REAL
-# ============================================================
-@socketio.on("connect")
-def on_connect():
-    # só para quem acabou de conectar
-    emit("connection_status", robot.status())
-    emit("fault_history", alarms.history_list())
-    with chart_history_lock:
-        points = list(chart_history)
-    emit("telemetry_history", points)
-
-
-def on_sample(sample):
-    """Chamado pelo poll_loop a cada leitura do robô."""
-    socketio.emit("telemetry", sample)
-    with chart_history_lock:
-        chart_history.append(chart_point(sample))
-
-    for event in alarms.check(sample):
-        if event["action"] == "stop":
-            try:
-                robot.send_command("stop")
-                event["stopped"] = True
-                event["message"] += " — programa parado"
-            except Exception as exc:
-                event["stopped"] = False
-                event["message"] += f" — FALHA ao parar: {exc}"
-        logging.warning("[%s] %s: %s", event["code"], event["joint"], event["message"])
-        socketio.emit("fault_event", event)
-
-
-def on_status():
-    socketio.emit("connection_status", robot.status())
-
+register_routes(app, robot, alarms, UR_IP, FRONTEND_CONFIG)        # routes (HTTP)
+realtime = Realtime(socketio, robot, alarms, CHART_HISTORY_SIZE)  # routes (tempo real)
 
 # ============================================================
 if __name__ == "__main__":
-    threading.Thread(target=poll_loop, args=(robot, POLL_HZ, on_sample, on_status), daemon=True).start()
+    # A aquisição roda numa thread separada e entrega cada leitura ao "realtime"
+    acquisition = threading.Thread(
+        target=acquisition_loop,
+        args=(robot, READS_PER_SECOND, realtime.on_new_sample, realtime.on_connection_change),
+        daemon=True,
+    )
+    acquisition.start()
+
     print(f"UR10 Dashboard -> http://localhost:{PORT}  (robô: {UR_IP})", flush=True)
     socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)

@@ -15,31 +15,45 @@ via RTDE, com limites de segurança configuráveis e alertas em tempo real.
 
 ```
 UR10_Dashboard/
-├── app.py              # Servidor Flask: configuração, páginas, API e Socket.IO
-├── robot.py            # Conexão com o robô (RTDE + Dashboard Server) e loop de leitura
-├── alarms.py           # Limites (thresholds.json), checagem e histórico de falhas
-├── thresholds.json     # Criado ao salvar os limites na página /config
-├── templates/
-│   ├── base.html       # Partes comuns: <head> e popup de alerta
-│   ├── home.html       # Tela inicial
-│   ├── monitor.html    # Telemetria
-│   └── config.html     # Limites
-├── static/
-│   ├── style.css       # Todos os estilos (cores no topo, em :root)
-│   └── js/
-│       ├── socket.js   # Conexão Socket.IO compartilhada
-│       ├── alerts.js   # Popup amarelo (alerta) / vermelho (STOP) — todas as páginas
-│       ├── home.js     # Status da conexão na tela inicial
-│       ├── settings.js # Tabela de limites (/config)
-│       ├── main.js     # /monitor: abas, botões Play/Pause/Stop, eventos
-│       ├── config.js   # Constantes: cores, métricas, tamanhos de buffer
-│       ├── charts.js   # Histórico + gráficos (Chart.js)
-│       ├── panels.js   # Status, cards, Fault History + popup Info, TCP pose, energia
-│       ├── logs.js     # Gravação de logs CSV
-│       └── utils.js    # Helpers de DOM e formatação
+├── app.py                    # Arquivo principal: configuração, junta as peças e liga o servidor
+├── thresholds.json           # Limites salvos pela página /config
+│
+├── rtde_data_receive/        # Conversa com o robô
+│   ├── robot.py              #   conexão RTDE + Dashboard Server, read(), play/pause/stop
+│   └── acquisition.py        #   loop que lê o robô 10x por segundo e entrega cada amostra
+│
+├── safety/                   # Regras de segurança
+│   └── alarms.py             #   limites, checagem de cada amostra, Fault History, ação STOP
+│
+├── routes/                   # Ponte entre os dados e o navegador
+│   ├── http_routes.py        #   páginas (/, /monitor, /config) e API (/api/...)
+│   └── realtime.py           #   Socket.IO: envia cada amostra e os eventos de falha
+│
+├── dashboard_interface/      # O que roda no navegador
+│   ├── templates/
+│   │   ├── base.html         #   partes comuns: <head> e popup de alerta
+│   │   ├── home.html         #   tela inicial
+│   │   ├── monitor.html      #   telemetria
+│   │   └── config.html       #   limites
+│   └── static/
+│       ├── style.css         #   todos os estilos (cores no topo, em :root)
+│       └── js/
+│           ├── socket.js     #   conexão Socket.IO compartilhada
+│           ├── alerts.js     #   popup amarelo (alerta) / vermelho (STOP), todas as páginas
+│           ├── home.js       #   status da conexão na tela inicial
+│           ├── settings.js   #   tabela de limites (/config)
+│           ├── main.js       #   /monitor: abas, botões Play/Pause/Stop, eventos
+│           ├── config.js     #   constantes: cores, métricas, tamanhos de buffer
+│           ├── charts.js     #   histórico + gráficos (Chart.js)
+│           ├── panels.js     #   status, cards, Fault History + popup Info, TCP pose
+│           ├── logs.js       #   gravação de logs CSV
+│           └── utils.js      #   helpers de DOM e formatação
 ├── requirements.txt
 └── README.md
 ```
+
+Regra da organização: `rtde_data_receive/` e `safety/` não sabem que existe navegador.
+Quem leva os dados para a tela é sempre `routes/`.
 
 ## Instalação e execução
 
@@ -60,7 +74,7 @@ Depois abra **http://localhost:5000**.
 - Ação por métrica:
   - **Alerta** → popup amarelo + registro no Fault History.
   - **STOP** → envia `stop` ao programa do robô + popup vermelho + registro no Fault History.
-- A checagem roda **no servidor** (`alarms.py`), então o STOP funciona mesmo sem
+- A checagem roda **no servidor** (`safety/alarms.py`), então o STOP funciona mesmo sem
   nenhuma aba do navegador aberta.
 - Um evento dispara uma vez ao passar do limite; só volta a disparar depois que o
   valor cai abaixo de 95% do limite (evita repetição por ruído).
@@ -72,44 +86,51 @@ Depois abra **http://localhost:5000**.
 
 - Leituras do RTDE equivalentes à aba *Readings* do PolyScope: tensão principal,
   tensão do robô, corrente do robô e tensão de cada junta.
-- O RTDE não envia potência: o `robot.py` calcula `P = tensão do robô × corrente do robô`
+- O RTDE não envia potência: o `rtde_data_receive/robot.py` calcula `P = tensão do robô × corrente do robô`
   e a **potência média** (média móvel das últimas 50 leituras, ~5 s).
 - Aba Home do monitor: um gráfico contínuo (últimos 60 s) com tensão principal, tensão do robô,
   corrente do robô e potência média. Cada unidade tem seu eixo Y (V à esquerda, A e W à direita);
   os botões ao lado mostram o valor atual e ligam/desligam cada parâmetro.
 - Cada evento do Fault History guarda uma "foto" do robô naquele instante
-  (`SNAPSHOT_FIELDS` em `alarms.py`). O botão **Info** mostra: posição, torque,
+  (`SNAPSHOT_FIELDS` em `safety/alarms.py`). O botão **Info** mostra: posição, torque,
   corrente, temperatura e tensão de cada junta, TCP em relação à base (mm / rad) e energia.
 - Os logs CSV também incluem as colunas de tensão, corrente e potência.
 
 ## Como os dados fluem
 
 ```
-robot.py poll_loop()  ->  app.py on_sample()
-                            ├─ emit "telemetry"   -> main.js (cards, gráficos, logs)
-                            └─ alarms.check()     -> se STOP: robot.send_command("stop")
-                                 └─ emit "fault_event" -> panels.js (Fault History)
-                                                       -> alerts.js (popup)
+rtde_data_receive/acquisition.py   acquisition_loop()   (thread iniciada no app.py)
+        │  10x por segundo
+        ▼
+rtde_data_receive/robot.py         robot.read()  -> dicionário com a amostra
+        │
+        ▼
+routes/realtime.py                 Realtime.on_new_sample(amostra)
+        ├─ emit "telemetry"         -> main.js (cards, gráficos, logs)
+        ├─ guarda no histórico      -> enviado a quem abrir a página ("telemetry_history")
+        └─ safety/alarms.py  alarms.check()
+               ├─ se STOP: stop_robot() -> robot.send_command("stop")
+               └─ emit "fault_event" -> panels.js (Fault History) e alerts.js (popup)
 ```
 
 ## Onde ajustar
 
 | O quê | Onde |
 |---|---|
-| IP, porta, frequência (`POLL_HZ`) | topo do `app.py` |
+| IP, porta, leituras por segundo (`READS_PER_SECOND`) | topo do `app.py` |
 | Nomes das juntas, cores de temperatura dos cards | `FRONTEND_CONFIG` no `app.py` |
-| Limites padrão, histerese, tamanho do histórico | topo do `alarms.py` |
-| Cores do tema | `:root` no `static/style.css` |
-| Cores das juntas, tamanho do histórico dos gráficos | `static/js/config.js` |
-| Nova métrica | `robot.py → read()`, `METRICS` em `config.js` e `alarms.py`, `COLUMNS` em `settings.js` |
-| Parâmetros do gráfico de energia (cor, unidade), janela de tempo | `POWER_METRICS` / `POWER_WINDOW` em `static/js/config.js` |
-| Janela da potência média | `POWER_AVG_SAMPLES` no `robot.py` |
-| Dados guardados no popup Info | `SNAPSHOT_FIELDS` no `alarms.py` |
+| Limites padrão, rearme (`RESET_BELOW`), tamanho do Fault History | topo do `safety/alarms.py` |
+| Cores do tema | `:root` no `dashboard_interface/static/style.css` |
+| Cores das juntas, tamanho do histórico dos gráficos | `dashboard_interface/static/js/config.js` |
+| Nova métrica | `rtde_data_receive/robot.py → read()`, `METRICS` em `config.js` e `safety/alarms.py`, `COLUMNS` em `settings.js` |
+| Parâmetros do gráfico de energia (cor, unidade), janela de tempo | `POWER_METRICS` / `POWER_WINDOW` em `dashboard_interface/static/js/config.js` |
+| Janela da potência média | `POWER_AVERAGE_SIZE` no `rtde_data_receive/robot.py` |
+| Dados guardados no popup Info | `SNAPSHOT_FIELDS` no `safety/alarms.py` |
 
 ## Observações
 
 - Reconecta automaticamente se o RTDE cair.
-- O histórico dos gráficos (últimos ~5 min, `HISTORY_SAMPLES` no `app.py`) fica no servidor:
+- O histórico dos gráficos (últimos ~5 min, `CHART_HISTORY_SIZE` no `app.py`) fica no servidor:
   ao trocar de página ou recarregar, os gráficos voltam com os dados. Só se perde ao reiniciar o `app.py`.
 - A gravação de logs CSV fica no navegador: sair da página no meio dela pede confirmação.
 - Se o Dashboard Server (porta 29999) falhar, a telemetria continua; os botões
