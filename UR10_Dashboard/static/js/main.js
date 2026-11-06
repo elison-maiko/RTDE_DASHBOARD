@@ -108,4 +108,11 @@ socket.on('connection_status', (state) => setConnection(state.connected, state.e
 socket.on('telemetry', onTelemetry);
 socket.on('fault_history', setFaultHistory);
 socket.on('fault_event', addFaultEvent);
+socket.on('telemetry_history', (samples) => {  // histórico guardado no servidor
+  history.load(samples);
+  if (isMetricTab(activeTab)) refreshMainChart();
+  if (activeTab === 'home' && samples.length) refreshPowerChart(samples[samples.length - 1]);
+});
+// Botão "Ver Fault History" do popup (alerts.js) quando já estamos nesta página
+window.addEventListener('open-tab', (e) => openTab(e.detail));
 socket.on('disconnect', () => setConnection(false, 'Servidor local desconectado'));

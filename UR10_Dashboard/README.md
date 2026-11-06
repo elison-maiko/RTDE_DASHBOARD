@@ -109,6 +109,9 @@ robot.py poll_loop()  ->  app.py on_sample()
 ## Observações
 
 - Reconecta automaticamente se o RTDE cair.
+- O histórico dos gráficos (últimos ~5 min, `HISTORY_SAMPLES` no `app.py`) fica no servidor:
+  ao trocar de página ou recarregar, os gráficos voltam com os dados. Só se perde ao reiniciar o `app.py`.
+- A gravação de logs CSV fica no navegador: sair da página no meio dela pede confirmação.
 - Se o Dashboard Server (porta 29999) falhar, a telemetria continua; os botões
   Play/Pause/Stop e a ação STOP retornam erro (o popup mostra "FALHA ao parar").
 - As bibliotecas (Chart.js, Socket.IO) vêm de CDN, então o navegador precisa de internet.

@@ -23,6 +23,17 @@ socket.on('fault_event', (event) => {
   else updateQueueInfo();
 });
 
+// "Ver Fault History": fecha o popup (o histórico já lista todos os eventos da fila).
+// Já no /monitor, só troca de aba — o link para a mesma página não faria nada.
+byId('alert-history').addEventListener('click', (e) => {
+  queue.length = 0;
+  modal.close();
+  if (location.pathname === '/monitor') {
+    e.preventDefault();
+    window.dispatchEvent(new CustomEvent('open-tab', { detail: 'fault' }));
+  }
+});
+
 byId('alert-ok').addEventListener('click', () => {
   modal.close();
   showNext();

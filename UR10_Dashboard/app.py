@@ -10,6 +10,7 @@ Páginas:  /  (início)   /monitor  (telemetria)   /config  (limites)
 import logging
 import os
 import threading
+from collections import deque
 
 from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO, emit
@@ -24,6 +25,7 @@ UR_IP = os.environ.get("UR_IP", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "5000"))
 POLL_HZ = 10          # leituras por segundo
 THRESHOLDS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "thresholds.json")
+HISTORY_SAMPLES = 3000  # amostras guardadas para os gráficos (~5 min a 10 Hz) = BUFFER_LEN em static/js/config.js
 
 JOINT_NAMES = ["J1 (Base)", "J2 (Shoulder)", "J3 (Elbow)",
                "J4 (Wrist 1)", "J5 (Wrist 2)", "J6 (Wrist 3)"]
@@ -49,6 +51,22 @@ app.config["SECRET_KEY"] = "ur10-dashboard"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 robot = Robot(UR_IP)
 alarms = Alarms(THRESHOLDS_FILE, JOINT_NAMES, MODE_FAULT)
+
+# Histórico dos gráficos fica no servidor: cada página que abre recebe as últimas
+# amostras, então nada se perde ao ir para /config e voltar (ou recarregar).
+CHART_FIELDS = ("timestamp", "temperature", "torque", "current", "joint_positions",
+                "main_voltage", "robot_voltage", "robot_current", "avg_power")
+chart_history = deque(maxlen=HISTORY_SAMPLES)
+chart_history_lock = threading.Lock()
+
+
+def chart_point(sample):
+    """Só os campos usados nos gráficos, arredondados (deixa o envio inicial leve)."""
+    def rnd(v):
+        if isinstance(v, list):
+            return [None if x is None else round(x, 4) for x in v]
+        return None if v is None else round(v, 4)
+    return {k: sample.get(k) if k == "timestamp" else rnd(sample.get(k)) for k in CHART_FIELDS}
 
 
 @app.context_processor
@@ -115,11 +133,16 @@ def on_connect():
     # só para quem acabou de conectar
     emit("connection_status", robot.status())
     emit("fault_history", alarms.history_list())
+    with chart_history_lock:
+        points = list(chart_history)
+    emit("telemetry_history", points)
 
 
 def on_sample(sample):
     """Chamado pelo poll_loop a cada leitura do robô."""
     socketio.emit("telemetry", sample)
+    with chart_history_lock:
+        chart_history.append(chart_point(sample))
 
     for event in alarms.check(sample):
         if event["action"] == "stop":

@@ -21,6 +21,10 @@ const savedLogs = [];
 
 export function initLogs() {
   byId('log-btn').addEventListener('click', toggleRecording);
+  // A gravação fica no navegador: avisa antes de sair da página no meio dela
+  window.addEventListener('beforeunload', (e) => {
+    if (recording) e.preventDefault();
+  });
 }
 
 /** Adiciona a amostra ao CSV, se estiver gravando */

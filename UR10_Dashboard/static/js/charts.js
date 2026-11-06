@@ -11,14 +11,16 @@
 import {
   BUFFER_LEN, JOINT_COLORS, JOINT_NAMES, LIVE_WINDOW, METRICS, POWER_METRICS, POWER_WINDOW, THEME,
 } from './config.js';
-import { byId, el, formatTime, pushCapped } from './utils.js';
+import { byId, el, formatTime, pushCapped, radToDeg } from './utils.js';
 
 const { Chart } = window;
 
 // ============================================================
-// HISTÓRICO
+// HISTÓRICO — ao abrir a página, o servidor envia as últimas amostras
+// (evento "telemetry_history") e load() preenche tudo de uma vez.
 // ============================================================
 export const history = {
+  lastTimestamp: 0,
   labels: [],     // horários (eixo X)
   positions: [],  // posição das juntas em graus, por amostra
   // series[junta][métrica] = [valores...]
@@ -26,7 +28,10 @@ export const history = {
   // power[campo] = [valores...]  (tensão, corrente e potência do robô)
   power: Object.fromEntries(POWER_METRICS.map(({ field }) => [field, []])),
 
+  /** Adiciona uma amostra. Ignora repetidas/antigas (podem chegar junto com a carga inicial). */
   push(sample, positionsDeg) {
+    if (sample.timestamp <= this.lastTimestamp) return;
+    this.lastTimestamp = sample.timestamp;
     pushCapped(this.labels, formatTime(sample.timestamp), BUFFER_LEN);
     pushCapped(this.positions, positionsDeg, BUFFER_LEN);
     for (const { field } of POWER_METRICS) pushCapped(this.power[field], sample[field] ?? null, BUFFER_LEN);
@@ -35,6 +40,16 @@ export const history = {
         pushCapped(joint[key], sample[meta.field][i] ?? 0, BUFFER_LEN);
       }
     });
+  },
+
+  /** Substitui todo o histórico pelas amostras enviadas pelo servidor */
+  load(samples) {
+    this.lastTimestamp = 0;
+    this.labels.length = 0;
+    this.positions.length = 0;
+    this.series.forEach((joint) => Object.values(joint).forEach((arr) => { arr.length = 0; }));
+    Object.values(this.power).forEach((arr) => { arr.length = 0; });
+    samples.forEach((s) => this.push(s, s.joint_positions?.map(radToDeg) ?? null));
   },
 };
 
