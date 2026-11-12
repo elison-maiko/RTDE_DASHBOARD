@@ -1,6 +1,6 @@
 {
   "current": {
-    "action": "stop",
+    "action": "alert",
     "limits": [
       null,
       null,
@@ -11,10 +11,10 @@
     ]
   },
   "torque": {
-    "action": "stop",
+    "action": "alert",
     "limits": [
       null,
-      40.0,
+      null,
       null,
       null,
       null,
