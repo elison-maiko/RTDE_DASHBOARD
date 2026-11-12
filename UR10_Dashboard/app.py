@@ -1,18 +1,17 @@
 """
-UR10 Dashboard — arquivo principal. Só junta as peças e liga o servidor.
-
+UR10 Dashboard — arquivo principal
+Responsável por juntar todas as peças
     python app.py                               # URSim local (127.0.0.1)
-    $env:UR_IP="192.168.1.10"; python app.py    # robô real
+    IP robô real "192.168.0.10"
 
-Pastas:
+Organização das Pastas:
     rtde_data_receive/    conexão com o robô e leitura dos dados (RTDE)
     safety/               limites de segurança e histórico de falhas
     routes/               páginas, API e envio dos dados em tempo real
     dashboard_interface/  HTML, CSS e JavaScript da tela
 
 Caminho de uma leitura:
-    acquisition_loop (rtde_data_receive) -> robot.read() -> Realtime.on_new_sample (routes)
-    -> navegador + alarms.check (safety)
+    acquisition_loop (rtde_data_receive) -> robot.read() -> Realtime.on_new_sample (routes) -> navegador + alarms.check (safety)
 """
 
 import logging
@@ -24,22 +23,22 @@ from flask_socketio import SocketIO
 
 from routes.http_routes import register_routes
 from routes.realtime import Realtime
-from rtde_data_receive.acquisition import acquisition_loop
+from rtde_data_receive.acquisition_loop import acquisition_loop
 from rtde_data_receive.robot import Robot
 from safety.alarms import Alarms
 
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
-UR_IP = os.environ.get("UR_IP", "127.0.0.1")
-PORT = int(os.environ.get("PORT", "5000"))
-READS_PER_SECOND = 10
+UR_IP = os.environ.get("UR_IP", "192.168.0.10")
+#IP do Iris Lab 192.168.0.10
+#IP do URSIM 127.0.0.1
+PORT = int(os.environ.get("PORT", "5001")) # Caso alguma outra aplicação use a 5001, só trocar a porta.
+READS_PER_SECOND = 20                      # Trocar a frequência de leitura
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 THRESHOLDS_FILE = os.path.join(BASE_DIR, "thresholds.json")
 
-# Amostras guardadas para os gráficos (~5 min a 10 leituras/s).
-# Mesmo valor de BUFFER_LEN em dashboard_interface/static/js/config.js
 CHART_HISTORY_SIZE = 3000
 
 JOINT_NAMES = ["J1 (Base)", "J2 (Shoulder)", "J3 (Elbow)",
@@ -69,11 +68,11 @@ app = Flask(
 app.config["SECRET_KEY"] = "ur10-dashboard"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
-robot = Robot(UR_IP)                                     # rtde_data_receive
-alarms = Alarms(THRESHOLDS_FILE, JOINT_NAMES, MODE_FAULT)  # safety
+robot = Robot(UR_IP)
+alarms = Alarms(THRESHOLDS_FILE, JOINT_NAMES, MODE_FAULT) 
 
-register_routes(app, robot, alarms, UR_IP, FRONTEND_CONFIG)        # routes (HTTP)
-realtime = Realtime(socketio, robot, alarms, CHART_HISTORY_SIZE)  # routes (tempo real)
+register_routes(app, robot, alarms, UR_IP, FRONTEND_CONFIG)       # routas (HTTP)
+realtime = Realtime(socketio, robot, alarms, CHART_HISTORY_SIZE)  # routas (tempo real)
 
 # ============================================================
 if __name__ == "__main__":
