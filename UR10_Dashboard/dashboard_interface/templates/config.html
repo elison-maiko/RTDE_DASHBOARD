@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}UR10 · Configurações{% endblock %}
+
+{% block content %}
+<header class="simple-header">
+  <a class="back-link" href="/">← Início</a>
+  <div class="brand">
+    <span class="model">RTDE · Dashboard</span>
+    <span class="sub">Configuração de limites</span>
+  </div>
+  <a class="back-link" href="/monitor">Monitor →</a>
+</header>
+
+<main class="config-page">
+  <section class="config-intro">
+    <h1>Limites de segurança</h1>
+    <p>Defina o valor máximo por junta. Ao ultrapassar, o evento vai para o <strong>Fault History</strong>
+       e o dashboard executa a ação escolhida para aquela métrica. Deixe o campo vazio para desativar.</p>
+    <div class="legend">
+      <span class="legend-item alert"><span class="legend-dot"></span>Alerta — mostra popup amarelo</span>
+      <span class="legend-item stop"><span class="legend-dot"></span>STOP — para o programa e mostra popup vermelho</span>
+    </div>
+    <p class="config-note">Torque e corrente comparam o valor absoluto (|valor|). O valor atual de cada junta aparece abaixo do campo.</p>
+  </section>
+
+  <form id="thresholds-form" class="config-card" novalidate>
+    <div class="table-scroll">
+      <table class="threshold-table">
+        <thead>
+          <tr id="metric-head"><th>Junta</th></tr>
+          <tr id="action-row"><th class="row-label">Ação ao atingir</th></tr>
+        </thead>
+        <tbody id="threshold-body"></tbody>
+      </table>
+    </div>
+
+    <div class="config-footer">
+      <span class="save-status" id="save-status"></span>
+      <button type="button" class="btn-ghost" id="reset-btn">Descartar alterações</button>
+      <button type="submit" class="btn-solid" id="save-btn" disabled>Salvar limites</button>
+    </div>
+  </form>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

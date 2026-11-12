@@ -1,178 +1,88 @@
 """
-UR10 RTDE Telemetry Dashboard — backend
+UR10 Dashboard — arquivo principal
+Responsável por juntar todas as peças
+    python app.py                               # URSim local (127.0.0.1)
+    IP robô real "192.168.0.10"
+
+Organização das Pastas:
+    rtde_data_receive/    conexão com o robô e leitura dos dados (RTDE)
+    safety/               limites de segurança e histórico de falhas
+    routes/               páginas, API e envio dos dados em tempo real
+    dashboard_interface/  HTML, CSS e JavaScript da tela
+
+Caminho de uma leitura:
+    acquisition_loop (rtde_data_receive) -> robot.read() -> Realtime.on_new_sample (routes) -> navegador + alarms.check (safety)
 """
 
+import logging
 import os
-import time
 import threading
-from flask import Flask, render_template, jsonify
+
+from flask import Flask
 from flask_socketio import SocketIO
-from rtde_receive import RTDEReceiveInterface
-from dashboard_client import DashboardClient
 
-def log(msg):
-    print(f"[dashboard] {msg}", flush=True)
+from routes.http_routes import register_routes
+from routes.realtime import Realtime
+from rtde_data_receive.acquisition_loop import acquisition_loop
+from rtde_data_receive.robot import Robot
+from safety.alarms import Alarms
 
-IP_UR = os.environ.get("UR_IP", "127.0.0.1")
-POLL_HZ = 10
+# ============================================================
+# CONFIGURAÇÃO
+# ============================================================
+UR_IP = os.environ.get("UR_IP", "192.168.0.10")
+#IP do Iris Lab 192.168.0.10
+#IP do URSIM 127.0.0.1
+PORT = int(os.environ.get("PORT", "5001")) # Caso alguma outra aplicação use a 5001, só trocar a porta.
+READS_PER_SECOND = 20                      # Trocar a frequência de leitura
 
-JOINT_NAMES = [
-    "J1 (Base)", "J2 (Shoulder)", "J3 (Elbow)",
-    "J4 (Wrist 1)", "J5 (Wrist 2)", "J6 (Wrist 3)"
-]
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+THRESHOLDS_FILE = os.path.join(BASE_DIR, "thresholds.json")
 
-JOINT_MODE_MAP = {
-    235: "RESET", 236: "SHUTDOWN", 238: "FREEDRIVE", 239: "POWER_OFF",
-    245: "NO_RESPONSE", 246: "INIT", 247: "BOOTING", 252: "FAULT",
-    253: "RUNNING", 255: "IDLE"
+CHART_HISTORY_SIZE = 3000
+
+JOINT_NAMES = ["J1 (Base)", "J2 (Shoulder)", "J3 (Elbow)",
+               "J4 (Wrist 1)", "J5 (Wrist 2)", "J6 (Wrist 3)"]
+MODE_RUNNING = 253
+MODE_FAULT = 252
+
+# Enviado ao navegador (lido em dashboard_interface/static/js/config.js)
+FRONTEND_CONFIG = {
+    "jointNames": JOINT_NAMES,
+    "modeRunning": MODE_RUNNING,
+    "modeFault": MODE_FAULT,
+    "tempWarnC": 50,  # card amarelo acima disso
+    "tempCritC": 60,  # card vermelho acima disso
 }
 
-app = Flask(__name__)
+# ============================================================
+# MONTAGEM
+# ============================================================
+logging.basicConfig(level=logging.INFO, format="[dashboard] %(levelname)s %(name)s: %(message)s")
+
+app = Flask(
+    __name__,
+    template_folder="dashboard_interface/templates",
+    static_folder="dashboard_interface/static",
+)
 app.config["SECRET_KEY"] = "ur10-dashboard"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
-state = {
-    "connected": False,
-    "dashboard_connected": False,
-    "error": None,
-    "ip": IP_UR,
-}
+robot = Robot(UR_IP)
+alarms = Alarms(THRESHOLDS_FILE, JOINT_NAMES, MODE_FAULT) 
 
-rtde_r = None
-dashboard_c = None
+register_routes(app, robot, alarms, UR_IP, FRONTEND_CONFIG)       # routas (HTTP)
+realtime = Realtime(socketio, robot, alarms, CHART_HISTORY_SIZE)  # routas (tempo real)
 
-def connect_rtde():
-    global rtde_r, dashboard_c
-    log(f"Attempting RTDE & Dashboard connection to {IP_UR} ...")
-    t0 = time.time()
-    try:
-        # 1. Tenta a conexão com a interface RTDE Receive
-        if rtde_r is None or not rtde_r.isConnected():
-            rtde_r = RTDEReceiveInterface(IP_UR)
-
-        # 2. Tenta a conexão com a interface Dashboard Client
-        if dashboard_c is None or not dashboard_c.isConnected():
-            dashboard_c = DashboardClient(IP_UR)
-            dashboard_c.connect()
-
-        if rtde_r.isConnected():
-            state["connected"] = True
-            state["dashboard_connected"] = dashboard_c.isConnected() if dashboard_c else False
-            state["error"] = None
-            log(f"Connected successfully in {time.time() - t0:.2f}s")
-            return True
-        else:
-            raise RuntimeError("RTDE Interface returned isConnected() == False")
-    except Exception as exc:
-        state["connected"] = False
-        state["dashboard_connected"] = False
-        state["error"] = str(exc)
-        rtde_r = None
-        dashboard_c = None
-        log(f"Connection FAILED: {exc}")
-        return False
-
-def poll_loop():
-    global rtde_r
-    period = 1.0 / POLL_HZ
-    retry_delay = 2.0
-
-    time.sleep(1.0)
-    log("Background poll thread active.")
-
-    while True:
-        if rtde_r is None or not state["connected"]:
-            if connect_rtde():
-                socketio.emit("connection_status", state)
-            else:
-                socketio.emit("connection_status", state)
-                time.sleep(retry_delay)
-                continue
-
-        try:
-            if not rtde_r.isConnected():
-                raise RuntimeError("RTDE connection lost")
-
-            joint_modes = rtde_r.getJointMode()
-            temperature = rtde_r.getJointTemperatures()
-            torque = rtde_r.getTargetMoment()
-            current = rtde_r.getActualCurrent()
-            tcp_pose = rtde_r.getActualTCPPose()
-            joint_positions = rtde_r.getActualQ()
-
-            payload = {
-                "timestamp": time.time(),
-                "joint_names": JOINT_NAMES,
-                "joint_modes": [
-                    {"code": int(m), "label": JOINT_MODE_MAP.get(int(m), "UNKNOWN")}
-                    for m in joint_modes
-                ],
-                "temperature": list(temperature),
-                "torque": list(torque),
-                "current": list(current),
-                "joint_positions": list(joint_positions) if joint_positions else None,
-                "tcp_pose": list(tcp_pose) if tcp_pose else None,
-            }
-            socketio.emit("telemetry", payload)
-
-        except Exception as exc:
-            log(f"Error while reading telemetry: {exc}")
-            state["connected"] = False
-            state["error"] = str(exc)
-            rtde_r = None
-            socketio.emit("connection_status", state)
-            time.sleep(retry_delay)
-            continue
-
-        time.sleep(period)
-
-@app.route("/")
-def index():
-    return render_template("index.html", ip=IP_UR)
-
-@app.route("/api/status")
-def status():
-    return jsonify(state)
-
-# ==========================================
-# ROTAS DE CONTROLO DO ROBÔ (Dashboard Client)
-# ==========================================
-
-@app.route("/api/control/<action>", methods=["POST"])
-def control_action(action):
-    global dashboard_c
-    if not dashboard_c or not dashboard_c.isConnected():
-        # Tenta reconectar o dashboard se estiver desligado
-        try:
-            dashboard_c = DashboardClient(IP_UR)
-            dashboard_c.connect()
-        except Exception as e:
-            return jsonify({"status": "error", "message": f"Dashboard não conectado: {e}"}), 500
-
-    try:
-        if action == "play":
-            dashboard_c.play()
-        elif action == "pause":
-            dashboard_c.pause()
-        elif action == "stop":
-            dashboard_c.stop()
-        else:
-            return jsonify({"status": "error", "message": "Ação inválida"}), 400
-
-        log(f"Comando do Dashboard executado: {action}")
-        return jsonify({"status": "ok", "action": action})
-    except Exception as e:
-        log(f"Erro ao executar comando {action}: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@socketio.on("connect")
-def on_connect():
-    log("Browser connected via Socket.IO")
-    socketio.emit("connection_status", state)
-
+# ============================================================
 if __name__ == "__main__":
-    t = threading.Thread(target=poll_loop, daemon=True)
-    t.start()
-    
-    print(f"UR10 Dashboard running -> http://localhost:5000 (target robot: {IP_UR})", flush=True)
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False, allow_unsafe_werkzeug=True)
+    # A aquisição roda numa thread separada e entrega cada leitura ao "realtime"
+    acquisition = threading.Thread(
+        target=acquisition_loop,
+        args=(robot, READS_PER_SECOND, realtime.on_new_sample, realtime.on_connection_change),
+        daemon=True,
+    )
+    acquisition.start()
+
+    print(f"UR10 Dashboard -> http://localhost:{PORT}  (robô: {UR_IP})", flush=True)
+    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)

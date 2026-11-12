@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}RTDE Dashboard Telemetry{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+{% block content %}{% endblock %}
+
+<!-- ============ POPUP DE ALERTA (todas as páginas) — js/alerts.js ============ -->
+<dialog class="alert-modal" id="alert-modal">
+  <div class="alert-stripe"></div>
+  <div class="alert-body">
+    <div class="alert-icon" id="alert-icon">⚠</div>
+    <div class="alert-kicker" id="alert-kicker">ALERTA</div>
+    <h2 class="alert-title" id="alert-title">Limite excedido</h2>
+    <p class="alert-joint" id="alert-joint"></p>
+
+    <div class="alert-reading">
+      <div class="reading-box">
+        <span class="reading-label">Valor medido</span>
+        <span class="reading-value" id="alert-value">—</span>
+      </div>
+      <div class="reading-box">
+        <span class="reading-label">Limite</span>
+        <span class="reading-value limit" id="alert-limit">—</span>
+      </div>
+    </div>
+
+    <p class="alert-message" id="alert-message"></p>
+    <p class="alert-time" id="alert-time"></p>
+
+    <div class="alert-actions">
+      <a class="btn-ghost" id="alert-history" href="/monitor#fault">Ver Fault History</a>
+      <button type="button" class="btn-solid" id="alert-ok">Entendi</button>
+    </div>
+    <p class="alert-queue" id="alert-queue" hidden></p>
+  </div>
+</dialog>
+
+<!-- Configuração vinda do app.py (FRONTEND_CONFIG) -->
+<script id="app-config" type="application/json">{{ frontend_config | tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='js/alerts.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

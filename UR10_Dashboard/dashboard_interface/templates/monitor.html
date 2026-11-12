@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}UR10 · Telemetria RTDE{% endblock %}
+
+{% block head %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- ======================= CABEÇALHO ======================= -->
+<header>
+  <div class="header-top">
+    <div class="brand">
+      <a class="back-link" href="/" title="Voltar ao início">←</a>
+      <span class="model">RTDE · Dashboard</span>
+      <span class="sub">Telemetria em tempo real</span>
+    </div>
+
+    <!-- Controle do programa (Dashboard Server) -->
+    <div class="robot-controls">
+      <button type="button" class="ctrl-btn play"  data-command="play"  title="Iniciar programa">▶ Play</button>
+      <button type="button" class="ctrl-btn pause" data-command="pause" title="Pausar programa">⏸ Pause</button>
+      <button type="button" class="ctrl-btn stop"  data-command="stop"  title="Parar programa">⏹ Stop</button>
+    </div>
+
+    <div class="status-cluster">
+      <div class="status-item">
+        <span class="label">Alvo</span>
+        <span class="value">{{ ip }}</span>
+      </div>
+      <div class="status-item">
+        <span class="label">Amostragem</span>
+        <span class="value" id="rate">— Hz</span>
+      </div>
+      <div class="status-stack">
+        <span class="pill wait" id="conn-pill">
+          <span class="dot"></span>
+          <span id="conn-label">Conectando…</span>
+        </span>
+        <button type="button" class="log-btn" id="log-btn">
+          <span class="dot-rec"></span> <span id="log-label">START LOGS</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- data-tab: "home" / "fault" / "logs" abrem a seção tab-<nome>;
+       "torque" / "current" / "temp" abrem o gráfico grande com essa métrica -->
+  <nav class="nav-tabs">
+    <button type="button" class="tab-btn active" data-tab="home">Home</button>
+    <button type="button" class="tab-btn" data-tab="torque">Torque</button>
+    <button type="button" class="tab-btn" data-tab="current">Current</button>
+    <button type="button" class="tab-btn" data-tab="temp">Temperature</button>
+    <button type="button" class="tab-btn" data-tab="fault">Fault History <span class="tab-count" id="fault-count" hidden></span></button>
+    <button type="button" class="tab-btn" data-tab="logs">Logs</button>
+    <a class="tab-btn tab-link" href="/config">⚙ Limites</a>
+  </nav>
+</header>
+
+<main>
+  <div class="error-banner" id="error-banner" hidden></div>
+
+  <!-- ======================= ABA: HOME ======================= -->
+  <!-- Cards criados em js/panels.js -->
+  <section id="tab-home" class="tab-content active">
+    <div class="grid" id="joint-grid"></div>
+  </section>
+
+  <!-- ============ ABA: GRÁFICO (Torque / Current / Temp) ============ -->
+  <!-- Lógica em js/charts.js -->
+  <section id="tab-telemetry" class="tab-content">
+    <div class="telemetry-layout">
+      <aside class="joint-selector">
+        <div class="selector-title">JOINTS</div>
+        <div id="joint-buttons" class="joint-buttons"></div>
+      </aside>
+
+      <div>
+        <div class="chart-header">
+          <div class="titles">
+            <div class="chart-title" id="chart-title">EVOLUÇÃO NO TEMPO</div>
+            <div class="chart-subtitle">Telemetria em tempo real das juntas selecionadas</div>
+          </div>
+          <div class="chart-actions">
+            <button type="button" class="pause-btn" id="live-btn" hidden><span>↺</span> Voltar ao vivo</button>
+            <button type="button" class="pause-btn" id="pause-btn">
+              <span id="pause-icon">⏸</span> <span id="pause-label">Pausar</span>
+            </button>
+          </div>
+        </div>
+        <div class="main-chart-container">
+          <canvas id="main-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== ABA: FAULT HISTORY =================== -->
+  <!-- Eventos vêm do servidor (safety/alarms.py): falhas de junta e limites excedidos -->
+  <section id="tab-fault" class="tab-content">
+    <table class="data-table">
+      <thead>
+        <tr><th>Horário</th><th>Junta</th><th>Tipo</th><th>Detalhe</th><th>Ação</th></tr>
+      </thead>
+      <tbody id="fault-body">
+        <tr class="empty-row"><td colspan="5">Nenhum registro de falha detectado.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ======================= ABA: LOGS ======================= -->
+  <!-- Gravação em js/logs.js -->
+  <section id="tab-logs" class="tab-content">
+    <table class="data-table">
+      <thead>
+        <tr><th>Arquivo</th><th>Início</th><th>Fim</th><th>Duração</th><th>Amostras</th><th>Download</th></tr>
+      </thead>
+      <tbody id="logs-body">
+        <tr class="empty-row"><td colspan="6">Nenhum log gerado ainda. Clique em "START LOGS" no topo da página.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ TCP POSE (visível em todas as abas) ============ -->
+  <div class="pose-panel" id="pose-panel" hidden>
+    <span class="pose-title">TCP Pose</span>
+    {% for axis in ["x", "y", "z", "rx", "ry", "rz"] %}
+    <span class="pose-val"><span>{{ axis | upper }}</span><span id="pose-{{ axis }}">—</span></span>
+    {% endfor %}
+  </div>
+
+  <!-- ============ ENERGIA DO ROBÔ (só na aba Home) ============ -->
+  <!-- Gráfico único em js/charts.js (parâmetros em POWER_METRICS, js/config.js) -->
+  <section class="telemetry-layout power-section" id="power-section">
+    <aside class="joint-selector">
+      <div class="selector-title">Parameters</div>
+      <div id="power-buttons" class="joint-buttons"></div>
+    </aside>
+
+    <div>
+      <div class="chart-header">
+        <div class="titles">
+          <div class="chart-title">Historical Energy Usage</div>
+          <div class="chart-subtitle">Últimos 60 s · potência = tensão × corrente do robô (média móvel ~5 s) · um eixo por unidade (V, A, W)</div>
+        </div>
+      </div>
+      <div class="main-chart-container power-chart-container">
+        <canvas id="power-chart"></canvas>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ POPUP INFO (botão "Info" do Fault History) ============ -->
+<dialog class="info-modal" id="info-modal">
+  <div class="info-head">
+    <div>
+      <div class="info-kicker" id="info-kicker"></div>
+      <h2 class="info-title" id="info-title"></h2>
+      <p class="info-message" id="info-message"></p>
+    </div>
+    <button type="button" class="info-close" id="info-close" aria-label="Fechar">✕</button>
+  </div>
+
+  <div class="info-body">
+    <h3 class="info-section">Juntas no momento do evento</h3>
+    <div class="table-scroll">
+      <table class="info-table">
+        <thead>
+          <tr><th>Junta</th><th>Posição</th><th>Torque</th><th>Corrente</th><th>Temp.</th><th>Tensão</th></tr>
+        </thead>
+        <tbody id="info-joints"></tbody>
+      </table>
+    </div>
+
+    <h3 class="info-section">TCP em relação à base</h3>
+    <div class="info-grid" id="info-tcp"></div>
+
+    <h3 class="info-section">Energia do robô</h3>
+    <div class="info-grid" id="info-power"></div>
+  </div>
+
+  <div class="info-foot">
+    <span class="info-time" id="info-time"></span>
+    <button type="button" class="btn-solid" id="info-ok">Fechar</button>
+  </div>
+</dialog>
+
+<footer>UR10 Dashboard · Created by Elison Maiko</footer>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% endblock %}
