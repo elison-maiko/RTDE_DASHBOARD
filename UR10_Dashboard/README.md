@@ -62,7 +62,7 @@ pip install -r requirements.txt
 
 python app.py                                   # URSim local (127.0.0.1)
 $env:UR_IP = "192.168.1.10"; python app.py      # robô real
-$env:PORT = "5050"; python app.py               # outra porta (padrão 5000)
+$env:PORT = "5000"; python app.py               # Ou outra porta (padrão 500X)
 ```
 
 Depois abra **http://localhost:5000**.
@@ -87,11 +87,8 @@ Depois abra **http://localhost:5000**.
 - Leituras do RTDE equivalentes à aba *Readings* do PolyScope: tensão principal,
   tensão do robô, corrente do robô e tensão de cada junta.
 - O RTDE não envia potência: o `rtde_data_receive/robot.py` calcula `P = tensão do robô × corrente do robô`
-  e a **potência média** (média móvel das últimas 50 leituras, ~5 s).
-- Aba Home do monitor: um gráfico contínuo (últimos 60 s) com tensão principal, tensão do robô,
-  corrente do robô e potência média. Cada unidade tem seu eixo Y (V à esquerda, A e W à direita);
-  os botões ao lado mostram o valor atual e ligam/desligam cada parâmetro.
-- Cada evento do Fault History guarda uma "foto" do robô naquele instante
+  e a **potência média** (média móvel das últimas 50 leituras).
+- Cada evento do Fault History guarda um registro do robô naquele instante
   (`SNAPSHOT_FIELDS` em `safety/alarms.py`). O botão **Info** mostra: posição, torque,
   corrente, temperatura e tensão de cada junta, TCP em relação à base (mm / rad) e energia.
 - Os logs CSV também incluem as colunas de tensão, corrente e potência.
@@ -100,17 +97,15 @@ Depois abra **http://localhost:5000**.
 
 ```
 rtde_data_receive/acquisition.py   acquisition_loop()   (thread iniciada no app.py)
-        │  10x por segundo
+        │
         ▼
-rtde_data_receive/robot.py         robot.read()  -> dicionário com a amostra
+rtde_data_receive/robot.py         robot.read()
         │
         ▼
 routes/realtime.py                 Realtime.on_new_sample(amostra)
         ├─ emit "telemetry"         -> main.js (cards, gráficos, logs)
         ├─ guarda no histórico      -> enviado a quem abrir a página ("telemetry_history")
         └─ safety/alarms.py  alarms.check()
-               ├─ se STOP: stop_robot() -> robot.send_command("stop")
-               └─ emit "fault_event" -> panels.js (Fault History) e alerts.js (popup)
 ```
 
 ## Onde ajustar
@@ -121,18 +116,19 @@ routes/realtime.py                 Realtime.on_new_sample(amostra)
 | Nomes das juntas, cores de temperatura dos cards | `FRONTEND_CONFIG` no `app.py` |
 | Limites padrão, rearme (`RESET_BELOW`), tamanho do Fault History | topo do `safety/alarms.py` |
 | Cores do tema | `:root` no `dashboard_interface/static/style.css` |
-| Cores das juntas, tamanho do histórico dos gráficos | `dashboard_interface/static/js/config.js` |
-| Nova métrica | `rtde_data_receive/robot.py → read()`, `METRICS` em `config.js` e `safety/alarms.py`, `COLUMNS` em `settings.js` |
 | Parâmetros do gráfico de energia (cor, unidade), janela de tempo | `POWER_METRICS` / `POWER_WINDOW` em `dashboard_interface/static/js/config.js` |
 | Janela da potência média | `POWER_AVERAGE_SIZE` no `rtde_data_receive/robot.py` |
 | Dados guardados no popup Info | `SNAPSHOT_FIELDS` no `safety/alarms.py` |
+
+## Observação MASTER
+
+- A gravação de logs CSV fica no navegador: sair da página no meio dela pede confirmação.
+- As bibliotecas (Chart.js, Socket.IO) vêm de CDN, então o navegador precisa de internet.
 
 ## Observações
 
 - Reconecta automaticamente se o RTDE cair.
 - O histórico dos gráficos (últimos ~5 min, `CHART_HISTORY_SIZE` no `app.py`) fica no servidor:
   ao trocar de página ou recarregar, os gráficos voltam com os dados. Só se perde ao reiniciar o `app.py`.
-- A gravação de logs CSV fica no navegador: sair da página no meio dela pede confirmação.
-- Se o Dashboard Server (porta 29999) falhar, a telemetria continua; os botões
-  Play/Pause/Stop e a ação STOP retornam erro (o popup mostra "FALHA ao parar").
-- As bibliotecas (Chart.js, Socket.IO) vêm de CDN, então o navegador precisa de internet.
+- Se o Dashboard Server (porta 29999) falhar, a telemetria continua;
+
