@@ -1,0 +1,283 @@
+#  Created by Elison Maiko
+#  INDICADO PARA USO NO UR10
+def Palletizing_Main():
+  # --------------------------------------------------------------------------
+  # 1. PARAMETROS
+  # --------------------------------------------------------------------------
+  global VEL_J = 0.750                      # [rad/s] (RoboDK)
+  global ACC_J = 1.200                      # [rad/s2] (RoboDK)
+  global VEL_L = 0.250                      # [m/s] (RoboDK)
+  global ACC_L = 1.200                      # [m/s2] (RoboDK)
+  global VEL_APROX = VEL_L                  # MoveL na pega/deposito (= VEL_L do RoboDK)
+  global FATOR_VEL = 1.0                    # escala de velocidade; < 1.0 no comissionamento
+  global R_MOVEJ = 0.05                     # [m] blend dos MoveJ
+  global R_MOVEL = 0.01                     # [m] blend dos MoveL (menor que R_MOVEJ, nunca 0)
+  global R_PEGA_DEPOSITO = 0.001            # [m] blend minimo na pega e no deposito (robo para no ponto)
+  global ACC_PARADA = 2.0                   # [rad/s2] parada por erro
+
+  global POSE_REF_UR10 = p[0.425582, 0.762586, 0.304904, 3.141591, -0.000001, -0.000003]  # TCP esperado em Q_PICK_INICIAL_APROX
+  global TOL_MODELO = 0.02                  # [m] desvio aceito (calibracao do robo real)
+  global TCP_ROBODK = p[0.000000, 0.000000, 0.120904, 0.000000, 0.000000, 0.000000]  # TCP do programa do RoboDK
+  global MASSA_CARGA = 0.28                  # [kg]
+  global COG_CARGA = [0.0, 0.0, 0.0]        # [m]
+
+  global DI_ERRO = 1                        # entrada que sinaliza erro (botao/CLP)
+  global PERIODO_MONITOR = 0.05             # [s]
+  global REG_CAIXA = 18                     # RTDE output_int_register: caixa atual
+  global REG_T_CAIXA = 18                   # RTDE output_double_register: tempo da caixa [s]
+
+  # --------------------------------------------------------------------------
+  # 2. TARGETS DO ROBODK
+  # --------------------------------------------------------------------------
+  # -- Rotina Pick_Box
+  global Q_PICK_INICIAL_APROX = [1.250619, -1.905917, -1.568995, -1.237484, 1.570796, -0.320177]  # x=425.6 y=762.6 z=304.9
+  global Q_PICK_MID_APROX = [1.767547, -2.180929, -1.356789, -1.174673, 1.570796, 0.196753]  # x=-33.6 y=1007.2 z=195.0
+  global Q_PICK_BOX = [1.767547, -2.293712, -1.443867, -0.974817, 1.570796, 0.196753]  # x=-33.6 y=1007.1 z=51.9
+  # -- Caixa 1
+  global Q_CX01_APROX = [-0.268240, -2.822407, -0.452119, -1.437867, 1.570796, -1.839036]  # x=1175.4 y=-493.1 z=30.4
+  global P_CX01_DEPOSITO = p[1.175369, -0.493045, -0.244000, 3.141593, 0.000000, 0.000000]  # x=1175.4 y=-493.0 z=-244.0
+  global Q_CX01_AFAST = [-0.268240, -2.820452, -0.449010, -1.442923, 1.570796, -1.839036]  # x=1175.4 y=-493.1 z=34.4
+  # -- Caixa 2
+  global Q_CX02_APROX = [-0.360388, -2.274112, -1.528250, -0.910029, 1.570796, -1.931189]  # x=843.7 y=-493.1 z=29.7
+  global P_CX02_DEPOSITO = p[0.843578, -0.493050, -0.244000, 3.141593, 0.000000, 0.000000]  # x=843.6 y=-493.1 z=-244.0
+  global Q_CX02_AFAST = [-0.360388, -2.270115, -1.526894, -0.915380, 1.570796, -1.931189]  # x=843.7 y=-493.1 z=33.7
+  # -- Caixa 3
+  global Q_CX03_APROX = [-0.534055, -1.949969, -2.105618, -0.656802, 1.570796, -2.104850]  # x=511.9 y=-493.2 z=29.5
+  global P_CX03_DEPOSITO = p[0.511780, -0.493070, -0.244000, 3.141593, 0.000000, 0.000000]  # x=511.8 y=-493.1 z=-244.0
+  global Q_CX03_AFAST = [-0.534055, -1.943965, -2.104047, -0.664363, 1.570796, -2.104850]  # x=511.9 y=-493.2 z=33.5
+  # -- Caixa 4
+  global Q_CX04_APROX = [-0.040840, -2.613124, -0.871816, -1.227446, 1.570796, -1.611637]  # x=1175.4 y=-212.1 z=30.1
+  global P_CX04_DEPOSITO = p[1.175375, -0.212066, -0.244000, 3.141593, 0.000000, 0.000000]  # x=1175.4 y=-212.1 z=-244.0
+  global Q_CX04_AFAST = [-0.040840, -2.610280, -0.870047, -1.232072, 1.570796, -1.611637]  # x=1175.4 y=-212.1 z=34.1
+  # -- Caixa 5
+  global Q_CX05_APROX = [-0.056701, -2.139494, -1.776623, -0.796280, 1.570796, -1.627497]  # x=843.7 y=-212.1 z=29.6
+  global P_CX05_DEPOSITO = p[0.843554, -0.212046, -0.244000, 3.141593, 0.000000, 0.000000]  # x=843.6 y=-212.0 z=-244.0
+  global Q_CX05_AFAST = [-0.056701, -2.134834, -1.775244, -0.802310, 1.570796, -1.627497]  # x=843.7 y=-212.1 z=33.6
+  # -- Caixa 6
+  global Q_CX06_APROX = [-0.092508, -1.755121, -2.402306, -0.554955, 1.570796, -1.663304]  # x=512.0 y=-212.1 z=29.4
+  global P_CX06_DEPOSITO = p[0.511778, -0.212083, -0.244000, 3.141593, 0.000000, 0.000000]  # x=511.8 y=-212.1 z=-244.0
+  global Q_CX06_AFAST = [-0.092508, -1.746935, -2.400299, -0.565164, 1.570796, -1.663304]  # x=512.0 y=-212.1 z=33.4
+  # -- Caixa 7
+  global Q_CX07_APROX = [0.197793, -2.584728, -0.928054, -1.199615, 1.570796, -1.373003]  # x=1178.0 y=68.9 z=30.1
+  global P_CX07_DEPOSITO = p[1.177927, 0.068913, -0.244000, 3.141593, 0.000000, 0.000000]  # x=1177.9 y=68.9 z=-244.0
+  global Q_CX07_AFAST = [0.197793, -2.581778, -0.926363, -1.204249, 1.570796, -1.373003]  # x=1178.0 y=68.9 z=34.1
+  # -- Caixa 8
+  global Q_CX08_APROX = [0.276415, -2.111238, -1.827430, -0.773722, 1.570796, -1.294382]  # x=843.7 y=68.9 z=29.6
+  global P_CX08_DEPOSITO = p[0.843589, 0.068939, -0.244000, 3.141593, 0.000000, 0.000000]  # x=843.6 y=68.9 z=-244.0
+  global Q_CX08_AFAST = [0.276415, -2.106420, -1.826033, -0.779934, 1.570796, -1.294382]  # x=843.7 y=68.9 z=33.6
+  # -- Caixa 9
+  global Q_CX09_APROX = [0.456800, -1.703438, -2.470810, -0.538134, 1.570796, -1.113997]  # x=512.0 y=69.0 z=29.4
+  global P_CX09_DEPOSITO = p[0.511779, 0.068899, -0.244000, 3.141593, 0.000000, 0.000000]  # x=511.8 y=68.9 z=-244.0
+  global Q_CX09_AFAST = [0.456800, -1.694462, -2.468646, -0.549283, 1.570796, -1.113997]  # x=512.0 y=69.0 z=33.4
+  # -- Caixa 10
+  global Q_CX10_APROX = [0.422544, -2.688854, -0.721022, -1.302520, 1.570796, -1.148252]  # x=1178.0 y=349.9 z=30.2
+  global P_CX10_DEPOSITO = p[1.177927, 0.349924, -0.244000, 3.141593, 0.000000, 0.000000]  # x=1177.9 y=349.9 z=-244.0
+  global Q_CX10_AFAST = [0.422544, -2.686236, -0.718969, -1.307175, 1.570796, -1.148252]  # x=1178.0 y=349.9 z=34.2
+  # -- Caixa 11
+  global Q_CX11_APROX = [0.572126, -2.195781, -1.673917, -0.842687, 1.570796, -0.998670]  # x=846.2 y=350.0 z=29.7
+  global P_CX11_DEPOSITO = p[0.846127, 0.349936, -0.244000, 3.141593, 0.000000, 0.000000]  # x=846.1 y=349.9 z=-244.0
+  global Q_CX11_AFAST = [0.572126, -2.191435, -1.672556, -0.848401, 1.570796, -0.998670]  # x=846.2 y=350.0 z=33.7
+  # -- Caixa 12
+  global Q_CX12_APROX = [0.867224, -1.839996, -2.279767, -0.592625, 1.570796, -0.703572]  # x=512.0 y=350.0 z=29.4
+  global P_CX12_DEPOSITO = p[0.511798, 0.349896, -0.244000, 3.141593, 0.000000, 0.000000]  # x=511.8 y=349.9 z=-244.0
+  global Q_CX12_AFAST = [0.867224, -1.832892, -2.277986, -0.601514, 1.570796, -0.703572]  # x=512.0 y=350.0 z=33.4
+  # -- Caixa 13
+  global Q_CX13_APROX = [-0.180481, -2.641469, -0.469853, -1.601060, 1.570796, -1.751281]  # x=1175.5 y=-381.1 z=225.0
+  global P_CX13_DEPOSITO = p[1.175386, -0.381076, -0.028000, 3.141593, 0.000000, 0.000000]  # x=1175.4 y=-381.1 z=-28.0
+  # -- Caixa 14
+  global Q_CX14_APROX = [-0.265255, -2.047533, -1.514452, -1.150408, 1.570796, -1.836051]  # x=843.9 y=-399.1 z=224.4
+  global P_CX14_DEPOSITO = p[0.843589, -0.399006, -0.028000, 3.141593, 0.000000, 0.000000]  # x=843.6 y=-399.0 z=-28.0
+  # -- Caixa 15
+  global Q_CX15_APROX = [-0.414858, -1.619313, -2.076610, -1.016468, 1.570796, -1.985661]  # x=512.3 y=-404.8 z=224.2
+  global P_CX15_DEPOSITO = p[0.511797, -0.404497, -0.028000, 3.141593, 0.000000, 0.000000]  # x=511.8 y=-404.5 z=-28.0
+  # -- Caixa 16
+  global Q_CX16_APROX = [0.078309, -2.464387, -0.804942, -1.443050, 1.570796, -3.063280]  # x=1169.6 y=-72.7 z=224.8
+  global P_CX16_DEPOSITO = p[1.169406, -0.072641, -0.028000, 2.221441, 2.221441, 0.000000]  # x=1169.4 y=-72.6 z=-28.0
+  # -- Caixa 17
+  global Q_CX17_APROX = [0.107771, -1.902915, -1.726913, -1.082568, 1.570796, -3.033819]  # x=833.5 y=-74.7 z=224.3
+  global P_CX17_DEPOSITO = p[0.833153, -0.074717, -0.028000, 2.221441, 2.221441, 0.000000]  # x=833.2 y=-74.7 z=-28.0
+  # -- Caixa 18
+  global Q_CX18_APROX = [0.158331, -1.376039, -2.297691, -1.038666, 1.570796, -2.983256]  # x=510.1 y=-84.6 z=224.3
+  global P_CX18_DEPOSITO = p[0.509406, -0.084641, -0.028000, 2.221441, 2.221441, 0.000000]  # x=509.4 y=-84.6 z=-28.0
+  # -- Caixa 19
+  global Q_CX19_APROX = [0.333412, -2.537552, -0.668616, -1.506214, 1.570796, -1.237384]  # x=1178.6 y=234.7 z=224.9
+  global P_CX19_DEPOSITO = p[1.178478, 0.234703, -0.028000, 3.141593, 0.000000, 0.000000]  # x=1178.5 y=234.7 z=-28.0
+  # -- Caixa 20
+  global Q_CX20_APROX = [0.456498, -1.959935, -1.645610, -1.106837, 1.570796, -1.114298]  # x=843.9 y=231.8 z=224.3
+  global P_CX20_DEPOSITO = p[0.843587, 0.231683, -0.028000, 3.141593, 0.000000, 0.000000]  # x=843.6 y=231.7 z=-28.0
+  # -- Caixa 21
+  global Q_CX21_APROX = [0.709674, -1.456598, -2.232608, -1.023180, 1.570796, -0.861123]  # x=512.3 y=224.0 z=224.2
+  global P_CX21_DEPOSITO = p[0.511796, 0.223549, -0.028000, 3.141593, 0.000000, 0.000000]  # x=511.8 y=223.5 z=-28.0
+
+  # --------------------------------------------------------------------------
+  # 3. VARIAVEIS DE ESTADO
+  # --------------------------------------------------------------------------
+  global TOTAL_CAIXAS = 21
+  global flag_erro = False                  # levantada pela thread de monitoramento
+  global cronometro_ativo = False
+  global caixa_atual = 0
+  global caixas_paletizadas = 0
+  global tempo_caixa = 0.0                  # [s]
+  global tempo_total = 0.0                  # [s]
+
+  # --------------------------------------------------------------------------
+  # 4. FUNCOES AUXILIARES
+  # --------------------------------------------------------------------------
+  def Verificar_Erros():
+    if flag_erro:
+      stopj(ACC_PARADA)
+      global cronometro_ativo = False
+      textmsg("PROGRAMA INTERROMPIDO na caixa ", caixa_atual)
+      popup("Entrada de erro acionada. Programa interrompido.", "Paletizacao", False, True)
+      halt
+    end
+  end
+
+  def Verificar_Limites(alvo):
+    # Target fora dos limites de seguranca do controlador (juntas, planos,
+    # orientacao do TCP): para antes de mover.
+    if not is_within_safety_limits(alvo):
+      textmsg("Target fora dos limites de seguranca: ", alvo)
+      popup("Target fora dos limites de seguranca. Programa interrompido.", "Paletizacao", False, True)
+      halt
+    end
+  end
+
+  def Verificar_Robo():
+    # Os targets foram calculados para o UR10. Em outro modelo (ex.: URSim iniciado como UR5)
+    # as juntas levariam o TCP a outro lugar e as poses ficariam
+    # fora de alcance: confere a cinematica do controlador antes de mover.
+    desvio = point_dist(get_forward_kin(Q_PICK_INICIAL_APROX), POSE_REF_UR10)
+    if desvio > TOL_MODELO:
+      textmsg("Robo diferente do UR10 do RoboDK. Desvio [m]: ", desvio)
+      popup("Robo diferente do UR10 usado no RoboDK. Confira o modelo do robo/URSim.", "Paletizacao", False, True)
+      halt
+    end
+  end
+
+  def MoverJ(alvo, raio):
+    Verificar_Erros()
+    Verificar_Limites(alvo)
+    movej(alvo, a=ACC_J, v=VEL_J * FATOR_VEL, r=raio)
+  end
+
+  def MoverL(alvo, vel, raio):
+    Verificar_Erros()
+    Verificar_Limites(alvo)
+    movel(alvo, a=ACC_L, v=vel * FATOR_VEL, r=raio)
+  end
+
+  def Aguardar_Parada():
+    sync()
+    while norm(get_actual_joint_speeds()) > 0.001:
+      sync()
+    end
+  end
+
+  # --------------------------------------------------------------------------
+  # 5. THREADS
+  # --------------------------------------------------------------------------
+  thread Thread_Cronometro():
+    # Tempo de ciclo por caixa e total.
+    while True:
+      if cronometro_ativo:
+        global tempo_caixa = tempo_caixa + get_steptime()
+        global tempo_total = tempo_total + get_steptime()
+        write_output_float_register(REG_T_CAIXA, tempo_caixa)
+      end
+      sync()
+    end
+  end
+
+  thread Thread_Monitor_Erros():
+    # So observa e sinaliza; quem para o robo e o programa principal.
+    while True:
+      if get_standard_digital_in(DI_ERRO):
+        global flag_erro = True
+      end
+      sleep(PERIODO_MONITOR)
+    end
+  end
+
+  # --------------------------------------------------------------------------
+  # 6. ROTINAS DO PROCESSO
+  # --------------------------------------------------------------------------
+  def Iniciar_Ciclo(n):
+    global caixa_atual = n
+    global tempo_caixa = 0.0
+    global cronometro_ativo = True
+    write_output_integer_register(REG_CAIXA, n)
+    textmsg("Inicio da caixa ", n)
+  end
+
+  def Encerrar_Ciclo(n):
+    global cronometro_ativo = False
+    global caixas_paletizadas = caixas_paletizadas + 1
+    textmsg("Fim da caixa ", n)
+    textmsg("  tempo de ciclo [s]: ", tempo_caixa)
+  end
+
+  def Pick_Box():
+    MoverJ(Q_PICK_INICIAL_APROX, R_MOVEJ)
+    MoverJ(Q_PICK_MID_APROX, R_MOVEJ)
+    MoverL(Q_PICK_BOX, VEL_APROX, R_PEGA_DEPOSITO)
+    MoverL(Q_PICK_MID_APROX, VEL_APROX, R_MOVEL)
+    MoverJ(Q_PICK_INICIAL_APROX, R_MOVEJ)
+  end
+
+  def Ciclo_Caixa(n, q_aprox, p_deposito, q_afast):
+    # Uma caixa: pega, deposito e afastamento. Os targets vem da camada (L0, L1...).
+    Iniciar_Ciclo(n)
+    Pick_Box()
+    MoverJ(q_aprox, R_MOVEJ)
+    MoverL(p_deposito, VEL_APROX, R_PEGA_DEPOSITO)
+    MoverJ(q_afast, R_MOVEJ)
+    Encerrar_Ciclo(n)
+  end
+
+  def Palletizing_L0():
+    Ciclo_Caixa(1, Q_CX01_APROX, P_CX01_DEPOSITO, Q_CX01_AFAST)
+    Ciclo_Caixa(2, Q_CX02_APROX, P_CX02_DEPOSITO, Q_CX02_AFAST)
+    Ciclo_Caixa(3, Q_CX03_APROX, P_CX03_DEPOSITO, Q_CX03_AFAST)
+    Ciclo_Caixa(4, Q_CX04_APROX, P_CX04_DEPOSITO, Q_CX04_AFAST)
+    Ciclo_Caixa(5, Q_CX05_APROX, P_CX05_DEPOSITO, Q_CX05_AFAST)
+    Ciclo_Caixa(6, Q_CX06_APROX, P_CX06_DEPOSITO, Q_CX06_AFAST)
+    Ciclo_Caixa(7, Q_CX07_APROX, P_CX07_DEPOSITO, Q_CX07_AFAST)
+    Ciclo_Caixa(8, Q_CX08_APROX, P_CX08_DEPOSITO, Q_CX08_AFAST)
+    Ciclo_Caixa(9, Q_CX09_APROX, P_CX09_DEPOSITO, Q_CX09_AFAST)
+    Ciclo_Caixa(10, Q_CX10_APROX, P_CX10_DEPOSITO, Q_CX10_AFAST)
+    Ciclo_Caixa(11, Q_CX11_APROX, P_CX11_DEPOSITO, Q_CX11_AFAST)
+    Ciclo_Caixa(12, Q_CX12_APROX, P_CX12_DEPOSITO, Q_CX12_AFAST)
+  end
+
+  def Palletizing_L1():
+    Ciclo_Caixa(13, Q_CX13_APROX, P_CX13_DEPOSITO, Q_CX13_APROX)
+    Ciclo_Caixa(14, Q_CX14_APROX, P_CX14_DEPOSITO, Q_CX14_APROX)
+    Ciclo_Caixa(15, Q_CX15_APROX, P_CX15_DEPOSITO, Q_CX15_APROX)
+    Ciclo_Caixa(16, Q_CX16_APROX, P_CX16_DEPOSITO, Q_CX16_APROX)
+    Ciclo_Caixa(17, Q_CX17_APROX, P_CX17_DEPOSITO, Q_CX17_APROX)
+    Ciclo_Caixa(18, Q_CX18_APROX, P_CX18_DEPOSITO, Q_CX18_APROX)
+    Ciclo_Caixa(19, Q_CX19_APROX, P_CX19_DEPOSITO, Q_CX19_APROX)
+    Ciclo_Caixa(20, Q_CX20_APROX, P_CX20_DEPOSITO, Q_CX20_APROX)
+    Ciclo_Caixa(21, Q_CX21_APROX, P_CX21_DEPOSITO, Q_CX21_APROX)
+  end
+
+  # --------------------------------------------------------------------------
+  # 7. PROGRAMA PRINCIPAL
+  # --------------------------------------------------------------------------
+  thrd_cronometro = run Thread_Cronometro()
+  thrd_monitor = run Thread_Monitor_Erros()
+  set_tcp(TCP_ROBODK)
+  set_payload(MASSA_CARGA, COG_CARGA)
+  Verificar_Robo()
+  textmsg("Paletizacao Palletizing_Main - inicio. Caixas previstas: ", TOTAL_CAIXAS)
+  Palletizing_L0()
+  Palletizing_L1()
+  Aguardar_Parada()
+  textmsg("Paletizacao concluida. Caixas: ", caixas_paletizadas)
+  textmsg("Tempo total em ciclo [s]: ", tempo_total)
+  kill thrd_monitor
+  kill thrd_cronometro
+end
+
+Palletizing_Main()
