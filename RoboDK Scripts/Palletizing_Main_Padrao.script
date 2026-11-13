@@ -1,0 +1,277 @@
+def Palletizing_Main():
+  # Global parameters:
+  global speed_ms    = 0.250
+  global speed_rads  = 0.750
+  global accel_mss   = 1.200
+  global accel_radss = 1.200
+  global blend_radius_m = 0.001
+  global ref_frame = p[0,0,0,0,0,0]
+  
+  #
+  # TO REMOVE HEADER:
+  # Go to "Program" -> "Post-Processor Editor"
+  # Select "Universal Robots"
+  # Set "INCLUDE_HEADER" to "False"
+  #
+  #--------------------------
+  # Add any default subprograms here
+  # For example, to drive a gripper as a program call:
+  # def Gripper_Open():
+  #   ...
+  # end
+  #
+  # Example to drive a spray gun:
+  def SprayOn(value):
+    # use the value as an output:
+    DO_SPRAY = 5
+    if value == 0:
+      set_standard_digital_out(DO_SPRAY, False)
+    else:
+      set_standard_digital_out(DO_SPRAY, True)
+    end
+  end
+
+  # Example to drive an extruder:
+  def Extruder(value):
+    # use the value as an output:
+    if value < 0:
+      # stop extruder
+    else:
+      # start extruder
+    end
+  end
+
+  # Example to move an external axis
+  def MoveAxis(value):
+    # use the value as an output:
+    DO_AXIS_1 = 1
+    DI_AXIS_1 = 1
+    if value <= 0:
+      set_standard_digital_out(DO_AXIS_1, False)
+
+      # Wait for digital input to change state
+      #while (get_standard_digital_in(DI_AXIS_1) != False):
+      #  sync()
+      #end
+    else:
+      set_standard_digital_out(DO_AXIS_1, True)
+
+      # Wait for digital input to change state
+      #while (get_standard_digital_in(DI_AXIS_1) != True):
+      #  sync()
+      #end
+    end
+  end
+  #--------------------------
+  
+  # Subprogram Replace_Boxes
+  def Replace_Boxes():
+    # Move objects
+  end
+  
+  # Subprogram Palletizing_L0
+  def Palletizing_L0():
+    Pick_Box()
+    ref_frame = p[0.346406, -0.633041, -0.460000, 0.000000, 0.000000, 0.000000]
+    blend_radius_m = 0.000
+    movej([-0.268240, -2.822407, -0.452121, -1.437865, 1.570796, -4.980629],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([-0.268240, -3.080192, -0.412329, -1.219873, 1.570796, -4.980629],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.268240, -2.820452, -0.449012, -1.442923, 1.570796, -4.980629],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.360388, -2.274094, -1.528273, -0.910018, 1.570796, -5.072782],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([-0.360388, -2.603822, -1.511583, -0.596983, 1.570796, -5.072782],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.360388, -2.270097, -1.526917, -0.915369, 1.570796, -5.072782],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.534039, -1.949969, -2.105618, -0.656802, 1.570796, -5.246425],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([-0.534039, -2.427160, -2.086367, -0.198875, 1.570796, -5.246425],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.534039, -1.943965, -2.104047, -0.664363, 1.570796, -5.246425],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.040827, -2.613037, -0.872008, -1.227350, 1.570796, -4.753212],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([-0.040827, -2.880073, -0.850035, -0.982284, 1.570796, -4.753212],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.040827, -2.610175, -0.870240, -1.231976, 1.570796, -4.753212],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.056710, -2.139494, -1.776623, -0.796282, 1.570796, -4.769095],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([-0.056710, -2.515648, -1.759623, -0.437123, 1.570796, -4.769095],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.056710, -2.134852, -1.775227, -0.802314, 1.570796, -4.769095],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.092487, -1.755121, -2.402306, -0.554954, 1.570796, -4.804874],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([-0.092487, -2.405744, -2.377906, 0.071256, 1.570796, -4.804874],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.092487, -1.746918, -2.400299, -0.565160, 1.570796, -4.804874],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.198257, -2.579754, -0.937861, -1.194772, 1.570796, -4.514137],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.198257, -2.850367, -0.917027, -0.944989, 1.570796, -4.514137],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.198257, -2.576804, -0.936181, -1.199409, 1.570796, -4.514137],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.276415, -2.111185, -1.827517, -0.773678, 1.570796, -4.435981],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.276415, -2.499381, -1.810325, -0.402674, 1.570796, -4.435981],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.276415, -2.106368, -1.826121, -0.779890, 1.570796, -4.435981],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.456882, -1.703450, -2.470810, -0.538137, 1.570796, -4.255514],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.456882, -2.416321, -2.444421, 0.148362, 1.570796, -4.255514],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.456882, -1.694474, -2.468629, -0.549287, 1.570796, -4.255514],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.422546, -2.688837, -0.721023, -1.302520, 1.570796, -4.289845],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.422546, -2.949659, -0.695399, -1.067333, 1.570796, -4.289845],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.422546, -2.686236, -0.718971, -1.307175, 1.570796, -4.289845],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.572105, -2.195799, -1.673905, -0.842692, 1.570796, -4.140288],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.572105, -2.550519, -1.657162, -0.504714, 1.570796, -4.140288],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.572105, -2.191435, -1.672546, -0.848406, 1.570796, -4.140288],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.867263, -1.840013, -2.279749, -0.592634, 1.570796, -3.845135],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.867263, -2.404139, -2.257985, -0.050261, 1.570796, -3.845135],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.867263, -1.832910, -2.277969, -0.601522, 1.570796, -3.845135],accel_radss,speed_rads,t=0,r=0)
+  end
+  
+  # Subprogram Pick_Box
+  def Pick_Box():
+    ref_frame = p[-0.033594, 1.006960, -0.163500, 0.000000, 0.000000, 0.000000]
+    set_tcp(p[0.000000, 0.000000, 0.120904, 0.000000, 0.000000, 0.000000])
+    movej([1.250619, -1.905917, -1.568995, -1.237484, 1.570796, -0.320177],accel_radss,speed_rads,t=0,r=0)
+    movej([1.767547, -2.180929, -1.356789, -1.174673, 1.570796, 0.196753],accel_radss,speed_rads,t=0,r=0)
+    movel([1.767547, -2.293712, -1.443867, -0.974817, 1.570796, 0.196753],accel_mss,speed_ms,t=0,r=0)
+    # Attach to OnRobot VG10 Vacuum Gripper
+    movel([1.767547, -2.180929, -1.356789, -1.174673, 1.570796, 0.196753],accel_mss,speed_ms,t=0,r=0)
+    movej([1.250619, -1.905917, -1.568995, -1.237484, 1.570796, -0.320177],accel_radss,speed_rads,t=0,r=0)
+  end
+  
+  # Subprogram Place_Box
+  def Place_Box():
+    # Detach from OnRobot VG10 Vacuum Gripper
+  end
+  
+  # Subprogram Palletizing_L1
+  def Palletizing_L1():
+    Pick_Box()
+    ref_frame = p[0.346406, -0.633041, -0.460000, 0.000000, 0.000000, 0.000000]
+    blend_radius_m = 0.000
+    movej([-0.180481, -2.641416, -0.469958, -1.601010, 1.570796, -4.892873],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([-0.180481, -2.747794, -0.710457, -1.254141, 1.570796, -4.892873],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.180481, -2.641416, -0.469958, -1.601010, 1.570796, -4.892873],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.258764, -2.043554, -1.520557, -1.148273, 1.570796, -4.971151],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([-0.258764, -2.280971, -1.654199, -0.777220, 1.570796, -4.971151],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.258764, -2.043554, -1.520557, -1.148273, 1.570796, -4.971151],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.397343, -1.607216, -2.089351, -1.015818, 1.570796, -5.109731],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([-0.397343, -1.976655, -2.251265, -0.484470, 1.570796, -5.109731],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.397343, -1.607216, -2.089351, -1.015818, 1.570796, -5.109731],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.158331, -1.376039, -2.297691, -1.038666, 1.570796, -2.983256],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.158331, -1.845825, -2.494878, -0.371684, 1.570796, -2.983256],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.158331, -1.376039, -2.297691, -1.038666, 1.570796, -2.983256],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.107774, -1.902915, -1.726913, -1.082568, 1.570796, -3.033819],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.107774, -2.175431, -1.863977, -0.672980, 1.570796, -3.033819],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.107774, -1.902915, -1.726913, -1.082568, 1.570796, -3.033819],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.078309, -2.464387, -0.804942, -1.443050, 1.570796, -3.063280],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.078309, -2.616982, -0.976857, -1.118548, 1.570796, -3.063280],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.078309, -2.464387, -0.804942, -1.443050, 1.570796, -3.063280],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.709684, -1.456582, -2.232625, -1.023184, 1.570796, -4.002703],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.709684, -1.889057, -2.415972, -0.407362, 1.570796, -4.002703],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.709684, -1.456582, -2.232625, -1.023184, 1.570796, -4.002703],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.456498, -1.959935, -1.645610, -1.106837, 1.570796, -4.255898],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.456498, -2.217493, -1.780602, -0.714292, 1.570796, -4.255898],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.456498, -1.959935, -1.645610, -1.106837, 1.570796, -4.255898],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.333412, -2.537552, -0.668616, -1.506214, 1.570796, -4.378979],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel([0.333412, -2.673618, -0.861688, -1.177087, 1.570796, -4.378979],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.333412, -2.537552, -0.668616, -1.506214, 1.570796, -4.378979],accel_radss,speed_rads,t=0,r=0)
+  end
+  
+  
+  # Main program:
+  # Program generated by RoboDK v6.0.5 for UR10 on 12/11/2026 01:40:40
+  # Using nominal kinematics.
+  Replace_Boxes()
+  Palletizing_L0()
+  Palletizing_L1()
+  # End of main program
+end
+
+Palletizing_Main()

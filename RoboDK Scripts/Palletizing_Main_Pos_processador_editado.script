@@ -1,0 +1,225 @@
+def Palletizing_Main():
+  # Global parameters:
+  global speed_ms    = 0.250
+  global speed_rads  = 0.750
+  global accel_mss   = 1.200
+  global accel_radss = 1.200
+  global blend_radius_m = 0.001
+    # Subprogram Replace_Boxes
+  def Replace_Boxes():
+    # Move objects
+  end
+  
+  # Subprogram Palletizing_L0
+  def Palletizing_L0():
+    Pick_Box()
+    # set_reference(p[0.346406, -0.633041, -0.460000, 0.000000, 0.000000, 0.000000])
+    blend_radius_m = 0.000
+    movej([-0.268240, -2.822407, -0.452119, -1.437867, 1.570796, -1.839036],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[1.175369, -0.493045, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.268240, -2.820452, -0.449010, -1.442923, 1.570796, -1.839036],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.360388, -2.274112, -1.528250, -0.910029, 1.570796, -1.931189],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.843578, -0.493050, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.360388, -2.270115, -1.526894, -0.915380, 1.570796, -1.931189],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.534055, -1.949969, -2.105618, -0.656802, 1.570796, -2.104850],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.511780, -0.493070, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.534055, -1.943965, -2.104047, -0.664363, 1.570796, -2.104850],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.040840, -2.613124, -0.871816, -1.227446, 1.570796, -1.611637],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[1.175375, -0.212066, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.040840, -2.610280, -0.870047, -1.232072, 1.570796, -1.611637],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.056701, -2.139494, -1.776623, -0.796280, 1.570796, -1.627497],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.843554, -0.212046, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.056701, -2.134834, -1.775244, -0.802310, 1.570796, -1.627497],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.092508, -1.755121, -2.402306, -0.554955, 1.570796, -1.663304],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.511778, -0.212083, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.092508, -1.746935, -2.400299, -0.565164, 1.570796, -1.663304],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.197793, -2.584728, -0.928054, -1.199615, 1.570796, -1.373003],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[1.177927, 0.068913, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.197793, -2.581778, -0.926363, -1.204249, 1.570796, -1.373003],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.276415, -2.111238, -1.827430, -0.773722, 1.570796, -1.294382],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.843589, 0.068939, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.276415, -2.106420, -1.826033, -0.779934, 1.570796, -1.294382],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.456800, -1.703438, -2.470810, -0.538134, 1.570796, -1.113997],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.511779, 0.068899, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.456800, -1.694462, -2.468646, -0.549283, 1.570796, -1.113997],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.422544, -2.688854, -0.721022, -1.302520, 1.570796, -1.148252],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[1.177927, 0.349924, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.422544, -2.686236, -0.718969, -1.307175, 1.570796, -1.148252],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.572126, -2.195781, -1.673917, -0.842687, 1.570796, -0.998670],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.846127, 0.349936, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.572126, -2.191435, -1.672556, -0.848401, 1.570796, -0.998670],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.867224, -1.839996, -2.279767, -0.592625, 1.570796, -0.703572],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.511798, 0.349896, -0.244000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0.000)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.867224, -1.832892, -2.277986, -0.601514, 1.570796, -0.703572],accel_radss,speed_rads,t=0,r=0)
+  end
+  
+  # Subprogram Pick_Box
+  def Pick_Box():
+    # set_reference(p[-0.033594, 1.006960, -0.163500, 0.000000, 0.000000, 0.000000])
+    set_tcp(p[0.000000, 0.000000, 0.120904, 0.000000, 0.000000, 0.000000])
+    COPY_BOX()
+    movej([1.250619, -1.905917, -1.568995, -1.237484, 1.570796, -0.320177],accel_radss,speed_rads,t=0,r=0)
+    movej([1.767547, -2.180929, -1.356789, -1.174673, 1.570796, 0.196753],accel_radss,speed_rads,t=0,r=0)
+    movel([1.767547, -2.293712, -1.443867, -0.974817, 1.570796, 0.196753],accel_mss,speed_ms,t=0,r=0)
+    # Attach to OnRobot VG10 Vacuum Gripper
+    movel([1.767547, -2.180929, -1.356789, -1.174673, 1.570796, 0.196753],accel_mss,speed_ms,t=0,r=0)
+    movej([1.250619, -1.905917, -1.568995, -1.237484, 1.570796, -0.320177],accel_radss,speed_rads,t=0,r=0)
+  end
+  
+  # Subprogram COPY_BOX
+  def COPY_BOX():
+    # Create RoboDK Box1
+    # Move RoboDK Box1
+  end
+  
+  # Subprogram Place_Box
+  def Place_Box():
+    # Detach from OnRobot VG10 Vacuum Gripper
+  end
+  
+  # Subprogram Palletizing_L1
+  def Palletizing_L1():
+    Pick_Box()
+    # set_reference(p[0.346406, -0.633041, -0.460000, 0.000000, 0.000000, 0.000000])
+    blend_radius_m = 0.000
+    movej([-0.180481, -2.641469, -0.469853, -1.601060, 1.570796, -1.751281],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[1.175386, -0.381076, -0.028000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.180481, -2.641469, -0.469853, -1.601060, 1.570796, -1.751281],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.265255, -2.047533, -1.514452, -1.150408, 1.570796, -1.836051],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.843589, -0.399006, -0.028000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.265255, -2.047533, -1.514452, -1.150408, 1.570796, -1.836051],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([-0.414858, -1.619313, -2.076610, -1.016468, 1.570796, -1.985661],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.511797, -0.404497, -0.028000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([-0.414858, -1.619313, -2.076610, -1.016468, 1.570796, -1.985661],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.078309, -2.464387, -0.804942, -1.443050, 1.570796, -3.063280],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[1.169406, -0.072641, -0.028000, 2.221441, 2.221441, 0.000000],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.078309, -2.464387, -0.804942, -1.443050, 1.570796, -3.063280],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.107771, -1.902915, -1.726913, -1.082568, 1.570796, -3.033819],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.833153, -0.074717, -0.028000, 2.221441, 2.221441, 0.000000],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.107771, -1.902915, -1.726913, -1.082568, 1.570796, -3.033819],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.158331, -1.376039, -2.297691, -1.038666, 1.570796, -2.983256],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.509406, -0.084641, -0.028000, 2.221441, 2.221441, 0.000000],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.158331, -1.376039, -2.297691, -1.038666, 1.570796, -2.983256],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.333412, -2.537552, -0.668616, -1.506214, 1.570796, -1.237384],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[1.178478, 0.234703, -0.028000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.333412, -2.537552, -0.668616, -1.506214, 1.570796, -1.237384],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.456498, -1.959935, -1.645610, -1.106837, 1.570796, -1.114298],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.843587, 0.231683, -0.028000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.456498, -1.959935, -1.645610, -1.106837, 1.570796, -1.114298],accel_radss,speed_rads,t=0,r=0)
+    Pick_Box()
+    blend_radius_m = 0.000
+    movej([0.709674, -1.456598, -2.232608, -1.023180, 1.570796, -0.861123],accel_radss,speed_rads,t=0,r=0)
+    blend_radius_m = 0.000
+    movel(p[0.511796, 0.223549, -0.028000, 3.141593, 0.000000, 0.000000],accel_mss,speed_ms,t=0,r=0)
+    Place_Box()
+    blend_radius_m = 0.000
+    movej([0.709674, -1.456598, -2.232608, -1.023180, 1.570796, -0.861123],accel_radss,speed_rads,t=0,r=0)
+  end
+  
+  
+  # Main program:
+  # Program generated by RoboDK v6.0.5 for UR10 on 12/11/2026 03:42:14
+  # Using nominal kinematics.
+  Replace_Boxes()
+  Palletizing_L0()
+  Palletizing_L1()
+  # End of main program
+end
+
+Palletizing_Main()
